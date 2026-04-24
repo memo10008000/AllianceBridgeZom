@@ -45,9 +45,9 @@ if _STUB:
     st.warning("⚠️ Running in stub mode — copy CSVs into data/ and restart.")
     st.stop()
 
-consent_df    = tables.get("consent", pd.DataFrame())
-referrals_df  = tables.get("referrals", pd.DataFrame())
-clients_df    = tables.get("clients", pd.DataFrame())
+consent_df   = tables.get("consent",   pd.DataFrame())
+referrals_df = tables.get("referrals", pd.DataFrame())
+clients_df   = tables.get("clients",   pd.DataFrame())
 
 # ── Section 1: KPI tiles ──────────────────────────────────────────────────────
 red_flags = get_red_flags(tables)
@@ -103,13 +103,12 @@ with st.spinner("Computing risk scores…"):
 if risk_df.empty:
     st.info("No client risk data available.")
 else:
-    # Filter to HIGH and MODERATE only for the dashboard view
     at_risk = risk_df[risk_df["risk_level"].isin(["HIGH", "MODERATE"])].head(20)
 
     if at_risk.empty:
         st.success("✅ No high or moderate risk clients today.")
     else:
-        # Colour-code the risk level column
+        # Colour map for risk level — use map() not applymap() (pandas ≥2.1)
         def style_risk(val):
             if val == "HIGH":
                 return "background-color: #FDECEA; color: #C00000; font-weight: bold"
@@ -121,12 +120,19 @@ else:
         display_df.columns = ["Client", "Risk Level", "Score", "Top Signal"]
         display_df.index = range(1, len(display_df) + 1)
 
-        styled = display_df.style.applymap(style_risk, subset=["Risk Level"])
+        # pandas ≥2.1 uses .map(), older versions use .applymap()
+        try:
+            styled = display_df.style.map(style_risk, subset=["Risk Level"])
+        except AttributeError:
+            styled = display_df.style.applymap(style_risk, subset=["Risk Level"])
+
         st.dataframe(styled, use_container_width=True)
+        st.caption(
+            f"Showing top {len(at_risk)} of "
+            f"{len(risk_df[risk_df['risk_level'].isin(['HIGH','MODERATE'])])} "
+            "at-risk clients"
+        )
 
-        st.caption(f"Showing top {len(at_risk)} of {len(risk_df[risk_df['risk_level'].isin(['HIGH','MODERATE'])])} at-risk clients")
-
-        # Row selection → navigate to profile
         selected_name = st.selectbox(
             "Open client profile:",
             options=["— select a client —"] + at_risk["full_name"].tolist(),
@@ -147,7 +153,6 @@ if referrals_df.empty:
     st.info("No referral data available.")
 else:
     pipeline_cols = st.columns(4)
-
     statuses = ["submitted", "acknowledged", "accepted", "in_progress"]
     labels   = ["New / Submitted", "Acknowledged", "Accepted", "In Progress"]
     icons    = ["📤", "👁️", "✅", "🔄"]
@@ -158,7 +163,6 @@ else:
         with col:
             st.metric(f"{icon} {label}", count)
 
-    # Stalled referrals detail
     if not stalled.empty:
         with st.expander(f"⏳ {len(stalled)} stalled referral(s) — view details"):
             show_cols = [c for c in
