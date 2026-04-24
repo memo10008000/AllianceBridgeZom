@@ -34,8 +34,17 @@ SHARED_CSS = """
     --sans:     'IBM Plex Sans', sans-serif;
 }
 
-html, body, [class*="css"], .stMarkdown, .stText,
-.stDataFrame, p, div, span, td, th, label, button {
+html, body, [class*="css"] {
+    font-family: var(--sans) !important;
+}
+/* Target content text but NOT spans (Material Symbols icons use span with icon font) */
+p, h1, h2, h3, h4, h5, h6, label, caption,
+.stMarkdown p, .stMarkdown li, .stMarkdown td,
+.stText, td, th, .element-container {
+    font-family: var(--sans) !important;
+}
+/* Override buttons but not their icon children */
+button > *:not([data-testid*="Icon"]):not(.material-symbols-rounded) {
     font-family: var(--sans) !important;
 }
 
