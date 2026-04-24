@@ -1,9 +1,11 @@
 """
 pages/2_Client_Search.py  —  SCR-02  Client Search
-Live suggestions as the user types — results update on every keystroke.
+Google-style live typeahead: suggestions appear on every keystroke via
+streamlit-searchbox. Selecting a suggestion navigates to the client profile.
 """
 import streamlit as st
 import pandas as pd
+from streamlit_searchbox import st_searchbox
 
 try:
     from src.data_loader import load_tables
@@ -15,20 +17,15 @@ except ImportError:
 
 inject_css()
 
-# ── Extra CSS for live search UX ──────────────────────────────────────────────
+# ── Extra CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* Search input — larger, more prominent */
-.stTextInput input {
+/* Searchbox wrapper — make it prominent */
+.stSearchbox > div > div > input {
     font-size: 1rem !important;
     padding: 0.65rem 0.9rem !important;
     border: 1.5px solid var(--border) !important;
     border-radius: 6px !important;
-    transition: border-color 0.15s !important;
-}
-.stTextInput input:focus {
-    border-color: var(--navy) !important;
-    box-shadow: 0 0 0 3px rgba(15,41,66,0.08) !important;
 }
 /* Result count badge */
 .result-count {
@@ -97,8 +94,6 @@ st.markdown("""
 .sug-consent.withdrawn{ background: #EDF2F7; color: var(--slate); }
 .sug-consent.norecord { background: #EDF2F7; color: var(--slate); }
 .sug-org { font-size: 0.7rem; color: var(--text-sm); margin-top: 0.15rem; }
-
-/* Match highlight */
 mark {
     background: rgba(13,124,124,0.15);
     color: var(--teal);
@@ -106,15 +101,11 @@ mark {
     border-radius: 2px;
     padding: 0 1px;
 }
-
-/* Empty state */
 .empty-state {
     text-align: center; padding: 2.5rem 1rem;
     color: var(--text-sm); font-size: 0.82rem;
 }
 .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-
-/* Search hint */
 .search-hint {
     font-size: 0.78rem; color: var(--text-sm);
     padding: 0.5rem 0; display: flex; align-items: center; gap: 0.4rem;
@@ -161,66 +152,6 @@ ocap_ids = set()
 if "ocap_protected" in clients_df.columns:
     ocap_ids = set(clients_df[clients_df["ocap_protected"]==True]["client_id"])
 
-# ── Search bar ────────────────────────────────────────────────────────────────
-# Pattern: widget writes to cs_input (its key); on_change copies the value into
-# cs_query. The search logic reads cs_query — a clean, separately managed string
-# that is never double-bound to the widget. This is the only reliable way to do
-# live search in Streamlit without a custom component.
-if "cs_query" not in st.session_state:
-    st.session_state.cs_query = ""
-
-def _sync_query():
-    st.session_state.cs_query = st.session_state.cs_input
-
-st.text_input(
-    "Search",
-    placeholder="Start typing a name, Client ID, DOB, or alias…  (press Enter to search)",
-    label_visibility="collapsed",
-    key="cs_input",
-    on_change=_sync_query,
-)
-
-q = (st.session_state.cs_query or "").strip()
-
-# ── Hint line ─────────────────────────────────────────────────────────────────
-if not q:
-    st.markdown(
-        '<div class="search-hint">🔍  Type a name, Client ID, DOB, or alias and press <strong>Enter</strong></div>',
-        unsafe_allow_html=True
-    )
-    st.stop()
-
-# ── Live search — runs on every character ─────────────────────────────────────
-mask = (
-    clients_df.get("first_name", pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
-    clients_df.get("last_name",  pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
-    clients_df.get("client_id",  pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
-    clients_df.get("aliases",    pd.Series(dtype=str)).str.contains(q, case=False, na=False)
-)
-if "dob" in clients_df.columns:
-    mask = mask | clients_df["dob"].astype(str).str.contains(q, na=False)
-
-hits = clients_df[mask].copy().head(30)  # cap at 30 for live performance
-
-total_matches = mask.sum()
-
-# ── Result count ──────────────────────────────────────────────────────────────
-if total_matches == 0:
-    st.markdown(f"""
-    <div class="empty-state">
-      <div class="empty-icon">🔎</div>
-      <div>No clients match <strong>{q}</strong></div>
-      <div style="margin-top:0.3rem;font-size:0.72rem">Try a different name, ID, or DOB</div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.stop()
-
-more = f"  ·  showing first 30" if total_matches > 30 else ""
-st.markdown(
-    f'<div class="result-count">{total_matches} match{"es" if total_matches != 1 else ""}{more}</div>',
-    unsafe_allow_html=True
-)
-
 # ── Highlight helper ──────────────────────────────────────────────────────────
 def highlight(text: str, q: str) -> str:
     """Wrap query match in <mark> for visual highlight."""
@@ -247,7 +178,6 @@ def get_all_consent_statuses(_consent_df, client_ids: tuple):
             result[cid] = "WITHDRAWN"
         elif pd.notna(c.get("expiry_date")):
             from datetime import date
-            import pandas as pd2
             exp = c["expiry_date"].date() if hasattr(c["expiry_date"], "date") else c["expiry_date"]
             today = date.today()
             if exp < today:
@@ -259,6 +189,97 @@ def get_all_consent_statuses(_consent_df, client_ids: tuple):
         else:
             result[cid] = "VALID"
     return result
+
+# ── Google-style live search function (called on every keystroke) ─────────────
+def _search_clients(query: str) -> list[tuple[str, str]]:
+    """
+    Called by st_searchbox on every keystroke.
+    Returns list of (display_label, client_id) tuples — shown in the dropdown.
+    """
+    if not query or len(query.strip()) < 1:
+        return []
+    q = query.strip()
+    mask = (
+        clients_df.get("first_name", pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+        clients_df.get("last_name",  pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+        clients_df.get("client_id",  pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+        clients_df.get("aliases",    pd.Series(dtype=str)).str.contains(q, case=False, na=False)
+    )
+    if "dob" in clients_df.columns:
+        mask = mask | clients_df["dob"].astype(str).str.contains(q, na=False)
+
+    hits = clients_df[mask].head(10)  # max 10 items in the dropdown
+    results = []
+    for _, row in hits.iterrows():
+        first     = str(row.get("first_name", "")).strip()
+        last      = str(row.get("last_name",  "")).strip()
+        cid       = str(row.get("client_id",  ""))
+        dob       = str(row.get("dob", ""))[:10]
+        housing   = str(row.get("housing_status", ""))
+        # Label shown in dropdown: "Jennifer Robinson  ·  CLI-0001  ·  1989-06-27"
+        label = f"{first} {last}  ·  {cid}  ·  DOB {dob}  ·  {housing}"
+        results.append((label, cid))
+    return results
+
+# ── Searchbox — renders the Google-style input + dropdown ─────────────────────
+selected_cid = st_searchbox(
+    _search_clients,
+    key="cs_searchbox",
+    placeholder="🔍  Type a name, Client ID, DOB, or alias…",
+    label="Client search",
+    label_visibility="collapsed",
+    default=None,
+    clear_on_submit=False,
+    rerun_on_update=True,
+)
+
+# ── If a suggestion was clicked — navigate straight to the profile ────────────
+if selected_cid:
+    st.session_state["selected_client_id"] = selected_cid
+    st.switch_page("pages/3_Client_Profile.py")
+
+# ── Below the searchbox: show the full card list for the current query ─────────
+# st_searchbox keeps the typed text in cs_searchbox-search (internal key).
+# We read it to drive the card list so users can also see all matches, not just
+# the 10 in the dropdown.
+raw_q = st.session_state.get("cs_searchbox-search", "") or ""
+q = raw_q.strip()
+
+if not q:
+    st.markdown(
+        '<div class="search-hint">🔍  Start typing — suggestions appear instantly</div>',
+        unsafe_allow_html=True
+    )
+    st.stop()
+
+# ── Full result list ──────────────────────────────────────────────────────────
+mask = (
+    clients_df.get("first_name", pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+    clients_df.get("last_name",  pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+    clients_df.get("client_id",  pd.Series(dtype=str)).str.contains(q, case=False, na=False) |
+    clients_df.get("aliases",    pd.Series(dtype=str)).str.contains(q, case=False, na=False)
+)
+if "dob" in clients_df.columns:
+    mask = mask | clients_df["dob"].astype(str).str.contains(q, na=False)
+
+hits          = clients_df[mask].copy().head(30)
+total_matches = mask.sum()
+
+if total_matches == 0:
+    st.markdown(f"""
+    <div class="empty-state">
+      <div class="empty-icon">🔎</div>
+      <div>No clients match <strong>{q}</strong></div>
+      <div style="margin-top:0.3rem;font-size:0.72rem">Try a different name, ID, or DOB</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
+
+more = f"  ·  showing first 30" if total_matches > 30 else ""
+st.markdown(
+    f'<div class="result-count">{total_matches} match{"es" if total_matches != 1 else ""}{more}</div>',
+    unsafe_allow_html=True
+)
 
 client_ids_tuple = tuple(hits["client_id"].tolist())
 consent_map = get_all_consent_statuses(consent_df, client_ids_tuple)
@@ -284,23 +305,19 @@ for _, row in hits.iterrows():
     cs         = consent_map.get(cid, "NO_RECORD")
     cs_cls, cs_lbl = CONSENT_LABEL.get(cs, ("norecord", "No Record"))
 
-    # Avatar initials
-    initials = f"{first[:1]}{last[:1]}".upper() or "??"
+    initials   = f"{first[:1]}{last[:1]}".upper() or "??"
     avatar_cls = cs_cls if cs_cls in ("valid","expired","expiring") else ""
 
-    # Extra badges
     badges_html = ""
     if cid in dup_ids:
         badges_html += '<span class="badge badge-dup" style="font-size:0.6rem">DUP</span>'
     if cid in ocap_ids:
         badges_html += '<span class="badge badge-ocap" style="font-size:0.6rem">OCAP</span>'
 
-    # Highlight matching text
     name_hl   = highlight(full_name, q)
     cid_hl    = highlight(cid, q)
     alias_str = f" · alias: {highlight(aliases, q)}" if aliases and aliases not in ("", "nan") else ""
 
-    # Card HTML (display only — button handles navigation)
     st.markdown(f"""
     <div class="suggestion-card">
       <div class="sug-avatar {avatar_cls}">{initials}</div>
@@ -317,7 +334,6 @@ for _, row in hits.iterrows():
     </div>
     """, unsafe_allow_html=True)
 
-    # Invisible button that sits on top and handles click
     if st.button(
         f"Open {full_name}",
         key=f"open_{cid}",
