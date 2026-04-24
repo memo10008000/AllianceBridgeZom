@@ -140,11 +140,13 @@ dup_df     = tables.get("dup_flags", pd.DataFrame())
 if clients_df.empty:
     st.error("Client data unavailable."); st.stop()
 
-# ── Clear any stale selected client ───────────────────────────────────────────
-# When the user arrives here (via sidebar or ← Search button), any previously
-# selected client must be forgotten. Otherwise a blocked client in session state
-# would cause an automatic loop back to the blocked profile.
-st.session_state.pop("selected_client_id", None)
+# ── Clear any stale selected client AND searchbox state ───────────────────────
+# CRITICAL: cs_searchbox holds the last selected client_id inside the widget.
+# If we only clear selected_client_id, the searchbox still returns the old
+# value on render → sets selected_client_id back → loops to blocked profile.
+# We must clear cs_searchbox too so the widget starts fresh.
+for _k in ("selected_client_id", "cs_searchbox", "cs_last_query"):
+    st.session_state.pop(_k, None)
 
 # ── Precompute dup and ocap sets once ─────────────────────────────────────────
 dup_ids = set()
