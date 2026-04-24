@@ -120,7 +120,7 @@ else:
         display_df = at_risk[["full_name", "risk_level", "risk_score", "top_signal"]].copy()
         display_df.columns = ["Client", "Risk Level", "Score", "Top Signal"]
         display_df.index = range(1, len(display_df) + 1)
-print(display_df.columns)
+st.write(display_df.columns)
         styled = display_df.style.applymap(style_risk, subset=["Risk Level"])
         st.dataframe(styled, use_container_width=True)
 
