@@ -23,13 +23,26 @@ def get_tables():
 tables         = get_tables()
 client_id      = st.session_state.get("selected_client_id")
 requesting_org = st.session_state.get("caseworker_org", "ORG-001")
+st.session_state["current_page"] = "profile"
 
-# ── Nav ───────────────────────────────────────────────────────────────────────
+# ── Helper: clear the selected client so we don’t loop back ─────────────────
+def _go_search():
+    """Clear selected client and return to Client Search."""
+    st.session_state.pop("selected_client_id", None)
+    st.session_state.pop("cs_last_query", None)      # reset searchbox query too
+    st.switch_page("pages/2_Client_Search.py")
+
+def _go_dashboard():
+    """Clear selected client and return to Dashboard."""
+    st.session_state.pop("selected_client_id", None)
+    st.switch_page("pages/1_Dashboard.py")
+
+# ── Nav ────────────────────────────────────────────────────────────────────────────
 c1, c2, c3 = st.columns([2, 2, 5])
 with c1:
-    if st.button("← Dashboard", key="cp_dash"): st.switch_page("pages/1_Dashboard.py")
+    if st.button("← Dashboard", key="cp_dash"):   _go_dashboard()
 with c2:
-    if st.button("← Search",    key="cp_search"): st.switch_page("pages/2_Client_Search.py")
+    if st.button("← Search",    key="cp_search"): _go_search()
 
 if _STUB:
     st.warning("Stub mode"); st.stop()
@@ -51,12 +64,16 @@ if gate_status != "ALLOW":
     </div>
     """, unsafe_allow_html=True)
     pill("This block has been logged for the Compliance Audit.", "gray")
-    b1, b2 = st.columns(2)
+    b1, b2, b3 = st.columns(3)
     with b1:
-        if st.button("📋 Record Consent", key="cp_block_consent", type="primary"):
-            st.switch_page("pages/4_Consent_Form.py")
+        # ← Back to Search: MUST clear selected_client_id first or we loop forever
+        if st.button("← Back to Search", key="cp_block_search", use_container_width=True):
+            _go_search()
     with b2:
-        if st.button("🚨 Compliance Audit", key="cp_block_audit"):
+        if st.button("📋 Record Consent", key="cp_block_consent", type="primary", use_container_width=True):
+            st.switch_page("pages/4_Consent_Form.py")
+    with b3:
+        if st.button("🚨 Compliance Audit", key="cp_block_audit", use_container_width=True):
             st.switch_page("pages/5_Compliance_Audit.py")
     st.stop()
 

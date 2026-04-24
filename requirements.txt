@@ -2,3 +2,4 @@ streamlit==1.45.0
 pandas>=2.0
 duckdb>=0.10
 pytest>=8.0
+streamlit-searchbox>=0.1.12
