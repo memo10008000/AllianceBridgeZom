@@ -1,242 +1,131 @@
 """
 pages/5_Compliance_Audit.py  —  SCR-05  HERO DEMO SCREEN
-Compliance Audit — RED_FLAG Dashboard
-
-This screen demonstrates the entire hackathon thesis in 90 seconds.
-It surfaces all 9 seeded RED_FLAG violations from the sample data.
-
-Developer A owns src/consent_gate.py (the logic).
-Developer B owns this page (the UI).
 """
 import streamlit as st
 import pandas as pd
 from datetime import date
 
-# ── Stub for development before Dev A merges ─────────────────────────────────
 try:
     from src.data_loader import load_tables
-    from src.consent_gate import (
-        get_red_flags,
-        get_expiring_soon,
-        get_encounters_on_expired_consent,
-    )
+    from src.consent_gate import get_red_flags, get_expiring_soon, get_encounters_on_expired_consent
+    from src.styles import inject_css, page_header, section_header, kpi_bar, pill
     _STUB = False
 except ImportError:
     _STUB = True
 
-st.set_page_config(
-    page_title="Compliance Audit — Coordinated Care Console",
-    page_icon="🚨",
-    layout="wide",
-)
+inject_css()
 
-# ── Data loading ──────────────────────────────────────────────────────────────
-@st.cache_data(show_spinner="Loading compliance data…")
+@st.cache_data(show_spinner=False)
 def get_tables():
-    if _STUB:
-        return {}
-    return load_tables()
+    return {} if _STUB else load_tables()
 
 tables = get_tables()
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("## 🚨 Compliance Audit")
-st.caption(
-    f"Consent Gate enforcement report · All organizations · "
-    f"As of {date.today().strftime('%B %d, %Y')}"
+page_header(
+    "Compliance Audit",
+    subtitle=f"Consent Gate · All organizations · {date.today().strftime('%d %b %Y')}",
 )
 
-col_back, col_export = st.columns([6, 1])
+col_back, col_export = st.columns([5, 1])
 with col_back:
-    if st.button("← Back to Dashboard"):
+    if st.button("← Dashboard", key="audit_back"):
         st.switch_page("pages/1_Dashboard.py")
 
-st.divider()
-
 if _STUB:
-    st.warning("⚠️ Running in stub mode — copy CSVs into data/ and restart.")
+    st.warning("Stub mode — add CSVs to data/ and restart.")
     st.stop()
 
-# ── Compute all violation sets ────────────────────────────────────────────────
-consent_df    = tables.get("consent", pd.DataFrame())
+consent_df    = tables.get("consent",    pd.DataFrame())
 encounters_df = tables.get("encounters", pd.DataFrame())
 
-red_flags              = get_red_flags(tables)
-expiring               = get_expiring_soon(tables, days=7)
-expiring_30            = get_expiring_soon(tables, days=30)
-encounters_on_expired  = get_encounters_on_expired_consent(tables)
+red_flags             = get_red_flags(tables)
+expiring_7            = get_expiring_soon(tables, days=7)
+expiring_30           = get_expiring_soon(tables, days=30)
+encounters_on_expired = get_encounters_on_expired_consent(tables)
+total                 = len(consent_df)
+score_val             = max(0, round(100 * (1 - len(red_flags) / max(total, 1)), 1))
+score_cls             = "ok" if score_val >= 95 else "warn" if score_val >= 80 else "alert"
 
-total_consent_records  = len(consent_df)
-compliance_score = max(
-    0,
-    round(100 * (1 - len(red_flags) / max(total_consent_records, 1)), 1)
-)
-
-# ── KPI tiles ─────────────────────────────────────────────────────────────────
-k1, k2, k3, k4, k5 = st.columns(5)
-
-with k1:
-    if len(red_flags) > 0:
-        st.error(f"### 🚩 {len(red_flags)}\n**RED_FLAG Violations**")
-    else:
-        st.success(f"### ✅ 0\n**RED_FLAG Violations**")
-
-with k2:
-    color = "error" if len(encounters_on_expired) > 0 else "success"
-    getattr(st, color)(
-        f"### 🔴 {len(encounters_on_expired)}\n**Encounters on Expired Consent**"
-    )
-
-with k3:
-    color = "warning" if len(expiring) > 0 else "success"
-    getattr(st, color)(
-        f"### ⏰ {len(expiring)}\n**Expiring ≤7 Days**"
-    )
-
-with k4:
-    st.info(f"### 📋 {len(expiring_30)}\n**Expiring ≤30 Days**")
-
-with k5:
-    color = "success" if compliance_score >= 95 else "warning" if compliance_score >= 80 else "error"
-    getattr(st, color)(
-        f"### {compliance_score}%\n**Compliance Score**"
-    )
+kpi_bar([
+    {"label": "RED_FLAG Violations",          "value": len(red_flags),             "sub": "require review",            "cls": "alert" if red_flags.shape[0] > 0 else "ok"},
+    {"label": "Encounters on Expired Consent","value": len(encounters_on_expired),  "sub": "potential PIPA violations",  "cls": "alert" if len(encounters_on_expired) > 0 else "ok"},
+    {"label": "Expiring ≤7 Days",             "value": len(expiring_7),            "sub": f"{len(expiring_30)} ≤30 days","cls": "warn" if len(expiring_7) > 0 else "ok"},
+    {"label": "Compliance Score",             "value": f"{score_val}%",            "sub": f"of {total} records clean",  "cls": score_cls},
+])
 
 st.divider()
 
-# ── Section 1: Critical RED_FLAG violations ───────────────────────────────────
-st.subheader("🔍 Violations by Type")
+col_l, col_r = st.columns([3, 2], gap="medium")
 
-if red_flags.empty:
-    st.success("✅ No RED_FLAG violations detected in the current dataset.")
-else:
-    by_type = (
-        red_flags["flag_type"]
-        .value_counts()
-        .reset_index()
-        .rename(columns={"flag_type": "RED_FLAG Pattern", "count": "Count"})
-    )
+with col_l:
+    section_header("🔍 Violations by Type")
 
-    for _, row in by_type.iterrows():
-        flag   = row["RED_FLAG Pattern"]
-        count  = row["Count"]
+    if red_flags.empty:
+        pill("✅  No RED_FLAG violations detected in the current dataset", "green")
+    else:
+        by_type = red_flags["flag_type"].value_counts()
+        SEVERITY = {
+            "RED_FLAG_EXPIRED_CONSENT_USED":    ("alert", "🔴"),
+            "RED_FLAG_WITHDRAWN_CONSENT_USED":  ("alert", "🔴"),
+            "RED_FLAG_OCAP_OVERRIDE":           ("alert", "🔴"),
+            "RED_FLAG_SCOPE_MISMATCH":          ("warn",  "🟠"),
+            "RED_FLAG_PURPOSE_VIOLATION":       ("warn",  "🟠"),
+            "RED_FLAG_MISSING_PURPOSE_CODE":    ("warn",  "🟡"),
+            "RED_FLAG_NO_CONSENT_RECORD":       ("warn",  "🟡"),
+        }
+        for flag, count in by_type.items():
+            sev, icon = SEVERITY.get(flag, ("warn", "🟡"))
+            kind = "red" if sev == "alert" else "amber"
+            with st.expander(f"{icon}  **{flag}** — {count} record(s)", expanded=sev == "alert"):
+                subset = red_flags[red_flags["flag_type"] == flag]
+                show_cols = [c for c in ["client_id","consent_id","status","expiry_date","notes"] if c in subset.columns]
+                st.dataframe(subset[show_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+                for idx, rec in subset.head(3).iterrows():
+                    cid = rec.get("client_id","")
+                    if cid and st.button(f"👤 View {cid}", key=f"vw_{flag}_{idx}"):
+                        st.session_state["selected_client_id"] = cid
+                        st.switch_page("pages/3_Client_Profile.py")
 
-        # Colour-code by severity
-        if flag in ("RED_FLAG_EXPIRED_CONSENT_USED",
-                    "RED_FLAG_WITHDRAWN_CONSENT_USED",
-                    "RED_FLAG_OCAP_OVERRIDE"):
-            icon = "🔴"
-        elif flag in ("RED_FLAG_SCOPE_MISMATCH", "RED_FLAG_PURPOSE_VIOLATION"):
-            icon = "🟠"
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_header("📅 Encounters on Expired Consent")
+
+    if encounters_on_expired.empty:
+        pill("✅  No encounters found on expired consent", "green")
+    else:
+        pill(f"🔴  {len(encounters_on_expired)} encounter(s) recorded after consent expired — potential PIPA violations", "red")
+        show_cols = [c for c in ["client_id","encounter_id","encounter_start","expiry_date","consent_id"] if c in encounters_on_expired.columns]
+        st.dataframe(encounters_on_expired[show_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+
+with col_r:
+    section_header("⏰ Expiring Consent")
+
+    tab7, tab30 = st.tabs(["≤ 7 Days", "≤ 30 Days"])
+    with tab7:
+        if expiring_7.empty:
+            pill("✅  None expiring this week", "green")
         else:
-            icon = "🟡"
+            pill(f"⏰  {len(expiring_7)} client(s) need urgent renewal", "amber")
+            show_cols = [c for c in ["client_id","expiry_date","sharing_scope_type"] if c in expiring_7.columns]
+            st.dataframe(expiring_7[show_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+    with tab30:
+        show_cols = [c for c in ["client_id","expiry_date","sharing_scope_type"] if c in expiring_30.columns]
+        if not expiring_30.empty and show_cols:
+            st.dataframe(expiring_30[show_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+        else:
+            pill("✅  None expiring within 30 days", "green")
 
-        with st.expander(f"{icon} **{flag}** — {count} record(s)", expanded=False):
-            subset = red_flags[red_flags["flag_type"] == flag]
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_header("📋 Full Audit Log")
 
-            # Show relevant columns, gracefully handle missing ones
-            show_cols = [c for c in
-                         ["client_id", "consent_id", "status",
-                          "expiry_date", "sharing_scope_type", "notes"]
-                         if c in subset.columns]
-            st.dataframe(
-                subset[show_cols].reset_index(drop=True),
-                use_container_width=True,
-                hide_index=True,
+    with st.expander("Show all RED_FLAG records"):
+        if red_flags.empty:
+            st.info("No violations.")
+        else:
+            st.dataframe(red_flags.reset_index(drop=True), use_container_width=True, hide_index=True)
+            st.download_button(
+                "⬇ Download CSV", red_flags.to_csv(index=False),
+                file_name=f"audit_{date.today()}.csv", mime="text/csv",
             )
 
-            # Action buttons per record
-            for idx, rec in subset.iterrows():
-                cid = rec.get("client_id", "")
-                if cid and st.button(
-                    f"👤 View Client {cid}",
-                    key=f"view_{flag}_{idx}",
-                ):
-                    st.session_state["selected_client_id"] = cid
-                    st.switch_page("pages/3_Client_Profile.py")
-
 st.divider()
-
-# ── Section 2: Encounters on expired consent ──────────────────────────────────
-st.subheader("📅 Encounters Recorded After Consent Expired")
-
-if encounters_on_expired.empty:
-    st.success("✅ No encounters found on expired consent.")
-else:
-    st.error(
-        f"⚠️ {len(encounters_on_expired)} encounter(s) recorded after client's "
-        "consent had already expired. These may constitute PIPA violations."
-    )
-    show_cols = [c for c in
-                 ["client_id", "encounter_id", "encounter_start",
-                  "expiry_date", "consent_id"]
-                 if c in encounters_on_expired.columns]
-    st.dataframe(
-        encounters_on_expired[show_cols].reset_index(drop=True),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-st.divider()
-
-# ── Section 3: Expiring soon ──────────────────────────────────────────────────
-st.subheader("⏰ Consent Expiring Soon")
-
-tab_7, tab_30 = st.tabs(["Expiring within 7 days", "Expiring within 30 days"])
-
-with tab_7:
-    if expiring.empty:
-        st.success("✅ No consent records expiring within 7 days.")
-    else:
-        st.warning(f"⚠️ {len(expiring)} client(s) need consent renewal urgently.")
-        show_cols = [c for c in
-                     ["client_id", "consent_id", "expiry_date",
-                      "sharing_scope_type", "purpose_codes"]
-                     if c in expiring.columns]
-        st.dataframe(
-            expiring[show_cols].reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-with tab_30:
-    if expiring_30.empty:
-        st.success("✅ No consent records expiring within 30 days.")
-    else:
-        show_cols = [c for c in
-                     ["client_id", "consent_id", "expiry_date",
-                      "sharing_scope_type", "purpose_codes"]
-                     if c in expiring_30.columns]
-        st.dataframe(
-            expiring_30[show_cols].reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-st.divider()
-
-# ── Section 4: Full audit log ─────────────────────────────────────────────────
-st.subheader("📋 Full Audit Log")
-
-with st.expander("Show full RED_FLAG audit log", expanded=False):
-    if red_flags.empty:
-        st.info("No violations to display.")
-    else:
-        st.dataframe(
-            red_flags.reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-        )
-        st.download_button(
-            label="⬇ Download Audit CSV",
-            data=red_flags.to_csv(index=False),
-            file_name=f"compliance_audit_{date.today()}.csv",
-            mime="text/csv",
-        )
-
-# ── Footer ────────────────────────────────────────────────────────────────────
-st.divider()
-st.caption(
-    "🔒 All gates enforced at query time — BC PIPA · FOIPPA · OCAP · "
-    "System fails safe: blocked access shows reason, never silent error."
-)
+st.markdown('<div style="font-size:0.7rem;color:#64748B">🔒 BC PIPA · FOIPPA · OCAP — gates enforced at query time · fails safe, never silent</div>', unsafe_allow_html=True)
