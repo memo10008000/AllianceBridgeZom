@@ -161,21 +161,18 @@ ocap_ids = set()
 if "ocap_protected" in clients_df.columns:
     ocap_ids = set(clients_df[clients_df["ocap_protected"]==True]["client_id"])
 
-# ── Session state ─────────────────────────────────────────────────────────────
-if "cs_query" not in st.session_state:
-    st.session_state.cs_query = ""
-
 # ── Search bar ────────────────────────────────────────────────────────────────
-query = st.text_input(
+# NOTE: Do NOT pass value= together with key= — Streamlit treats the session-state
+# key as the single source of truth and silently ignores value=, which breaks the
+# live-search by always delivering an empty string to the filter logic.
+st.text_input(
     "Search",
-    value=st.session_state.cs_query,
     placeholder="Start typing a name, Client ID, DOB, or alias…",
     label_visibility="collapsed",
     key="cs_input",
 )
-st.session_state.cs_query = query
 
-q = (query or "").strip()
+q = (st.session_state.get("cs_input") or "").strip()
 
 # ── Hint line ─────────────────────────────────────────────────────────────────
 if not q:
