@@ -191,7 +191,7 @@ def get_all_consent_statuses(_consent_df, client_ids: tuple):
     return result
 
 # ── Google-style live search function (called on every keystroke) ─────────────
-def _search_clients(query: str) -> list[tuple[str, str]]:
+def _search_clients(query: str, **_kwargs) -> list:
     """
     Called by st_searchbox on every keystroke.
     Returns list of (display_label, client_id) tuples — shown in the dropdown.
@@ -236,7 +236,6 @@ selected_cid = st_searchbox(
     _search_clients,
     key="cs_searchbox",
     placeholder="🔍  Type a name, Client ID, DOB, or alias…",
-    label="Client search",
     default=None,
     clear_on_submit=False,
 )
