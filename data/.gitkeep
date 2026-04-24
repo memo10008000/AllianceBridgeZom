@@ -1,0 +1,11 @@
+# Copy the 7 sample CSVs from the kit into this folder:
+#
+#   clients_sample.csv
+#   consent_records_sample.csv
+#   organizations_sample.csv
+#   referrals_sample.csv
+#   service_encounters_sample.csv
+#   data_sharing_agreements_sample.csv
+#   duplicate_flags_sample.csv
+#
+# Source: tracks/referral-care-coordination/data/sample/
