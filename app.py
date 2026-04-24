@@ -17,20 +17,20 @@ st.set_page_config(
 )
 
 # ── Caseworker session ────────────────────────────────────────────────────────
-if "caseworker_org"     not in st.session_state: st.session_state.caseworker_org  = "ORG-001"
+if "caseworker_org"     not in st.session_state: st.session_state.caseworker_org  = "ORG-0001"
 if "caseworker_name"    not in st.session_state: st.session_state.caseworker_name = "J. Nguyen"
 if "selected_client_id" not in st.session_state: st.session_state.selected_client_id = None
 
 ORG_OPTIONS = {
-    "ORG-001": "Our Place Society",
-    "ORG-002": "Cool Aid Society",
-    "ORG-003": "BC Housing",
-    "ORG-004": "Island Health",
-    "ORG-005": "Beacon Community Services",
-    "ORG-006": "Pacifica Housing",
-    "ORG-007": "Salvation Army",
-    "ORG-008": "VIRCS",
-    "ORG-009": "Victoria Cool Aid",
+    "ORG-0001": "Inner Harbour Emergency Shelter",
+    "ORG-0002": "Rock Bay Youth Shelter",
+    "ORG-0003": "Downtown Outreach Collective",
+    "ORG-0004": "Pandora Recovery Services",
+    "ORG-0005": "Island Mental Health Partners",
+    "ORG-0006": "Vancouver Island Legal Aid Clinic",
+    "ORG-0007": "Mustard Seed Food Bank",
+    "ORG-0008": "Pacifica Supportive Housing",
+    "ORG-0009": "Our Place Community Hub",
 }
 
 # ── Navigation — NO icon= parameter, no emoji in title ───────────────────────

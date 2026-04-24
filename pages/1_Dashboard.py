@@ -339,9 +339,18 @@ if not referrals_df.empty and "status" in referrals_df.columns:
     stalled = referrals_df[referrals_df["status"].isin(["submitted","acknowledged"])]
 
 # Active Clients KPI: filtered to caseworker's org
-org_clients = clients_df[
-    clients_df["primary_org_id"] == org_id
-] if not clients_df.empty and "primary_org_id" in clients_df.columns else clients_df
+# Normalise org ID: session may store "ORG-001" but CSV uses "ORG-0001"
+def _normalise_org(oid: str) -> str:
+    import re
+    m = re.match(r"ORG-0*(\d+)$", str(oid))
+    return f"ORG-{int(m.group(1)):04d}" if m else str(oid)
+org_id_norm = _normalise_org(org_id)
+if not clients_df.empty and "primary_org_id" in clients_df.columns:
+    org_clients = clients_df[
+        clients_df["primary_org_id"].apply(_normalise_org) == org_id_norm
+    ]
+else:
+    org_clients = clients_df
 active_clients = len(org_clients)
 
 with st.spinner("Computing risk scores…"):
@@ -375,6 +384,7 @@ def kpi_card(col, css_cls, label, value, sub, btn_key, dialog_fn, *dialog_args):
     with col:
         # Pure HTML card — big number renders correctly
         st.markdown(f"""
+        <div style="position:relative;z-index:1">
         <div style="
             background:var(--white);
             border:1px solid var(--border);
@@ -395,27 +405,37 @@ def kpi_card(col, css_cls, label, value, sub, btn_key, dialog_fn, *dialog_args):
           <div style="font-size:0.63rem;color:var(--text-sm);
                       font-family:'IBM Plex Sans',sans-serif">{sub}</div>
         </div>
+        </div>
         """, unsafe_allow_html=True)
 
-        # Transparent button — zero-height, z-index covers the card above
+        # Invisible trigger button overlaid on the HTML card
         st.markdown(f"""<style>
         button[data-testid="{btn_key}"] {{
-            height:0 !important; min-height:0 !important;
+            position:absolute !important;
+            top:0 !important; left:0 !important;
+            width:100% !important; height:100% !important;
+            min-height:0 !important;
             padding:0 !important; margin:0 !important;
-            border:none !important; background:transparent !important;
-            box-shadow:none !important; opacity:0 !important;
-            width:100% !important; cursor:pointer !important;
-            position:relative !important; top:-105px !important;
-            z-index:20 !important; display:block !important;
+            border:none !important;
+            background:transparent !important;
+            box-shadow:none !important;
+            opacity:0 !important;
+            cursor:pointer !important;
+            z-index:100 !important;
+            font-size:0 !important;
+            line-height:0 !important;
+            color:transparent !important;
         }}
         div[data-testid="stButton"]:has(button[data-testid="{btn_key}"]) {{
-            margin-top:-105px !important; height:105px !important;
-            overflow:hidden !important; position:relative !important;
-            z-index:20 !important;
+            position:absolute !important;
+            top:0 !important; left:0 !important;
+            width:100% !important; height:100% !important;
+            margin:0 !important; padding:0 !important;
+            z-index:100 !important;
         }}
         </style>""", unsafe_allow_html=True)
 
-        if st.button("·", key=btn_key, use_container_width=True):
+        if st.button("", key=btn_key, use_container_width=True):
             dialog_fn(*dialog_args)
 
 k1, k2, k3, k4 = st.columns(4)
