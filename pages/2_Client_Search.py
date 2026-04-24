@@ -140,6 +140,12 @@ dup_df     = tables.get("dup_flags", pd.DataFrame())
 if clients_df.empty:
     st.error("Client data unavailable."); st.stop()
 
+# ── Clear any stale selected client ───────────────────────────────────────────
+# When the user arrives here (via sidebar or ← Search button), any previously
+# selected client must be forgotten. Otherwise a blocked client in session state
+# would cause an automatic loop back to the blocked profile.
+st.session_state.pop("selected_client_id", None)
+
 # ── Precompute dup and ocap sets once ─────────────────────────────────────────
 dup_ids = set()
 if not dup_df.empty and "client_id_primary" in dup_df.columns:
