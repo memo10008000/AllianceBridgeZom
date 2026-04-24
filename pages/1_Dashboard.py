@@ -324,34 +324,47 @@ st.markdown(f"""
 if _STUB:
     st.warning("Stub mode — add CSVs to data/ and restart."); st.stop()
 
+# ── Normalise org ID: session may store "ORG-001", CSV uses "ORG-0001" ────────
+import re as _re
+def _norm_org(oid: str) -> str:
+    m = _re.match(r"ORG-0*(\d+)$", str(oid))
+    return f"ORG-{int(m.group(1)):04d}" if m else str(oid)
+
+org_id_norm = _norm_org(org_id)
+
+# ── Load tables ──────────────────────────────────────────────────────────────
 consent_df   = tables.get("consent",   pd.DataFrame())
 referrals_df = tables.get("referrals", pd.DataFrame())
 clients_df   = tables.get("clients",   pd.DataFrame())
 orgs_df      = tables.get("orgs",      pd.DataFrame())
+encounters_df = tables.get("encounters", pd.DataFrame())
 
-red_flags             = get_red_flags(tables)
-expiring_7            = get_expiring_soon(tables, days=7)
-expiring_30           = get_expiring_soon(tables, days=30)
-encounters_on_expired = get_encounters_on_expired_consent(tables)
+# ── Org-filtered views ───────────────────────────────────────────────────────
+# All KPIs scoped to the caseworker's org
+def _filter_org(df, col):
+    if df.empty or col not in df.columns: return df
+    return df[df[col].apply(_norm_org) == org_id_norm]
+
+org_clients   = _filter_org(clients_df,   "primary_org_id")
+org_consent   = _filter_org(consent_df,   "collecting_org_id")
+org_referrals = _filter_org(referrals_df, "referring_org_id")
+
+active_clients = len(org_clients)
+
+# ── Build org-scoped tables dict for consent_gate functions ──────────────────
+org_tables = dict(tables)
+org_tables["consent"]   = org_consent
+org_tables["referrals"] = org_referrals
+
+# ── Compute metrics ──────────────────────────────────────────────────────────
+red_flags             = get_red_flags(org_tables)
+expiring_7            = get_expiring_soon(org_tables, days=7)
+expiring_30           = get_expiring_soon(org_tables, days=30)
+encounters_on_expired = get_encounters_on_expired_consent(org_tables)
 
 stalled = pd.DataFrame()
-if not referrals_df.empty and "status" in referrals_df.columns:
-    stalled = referrals_df[referrals_df["status"].isin(["submitted","acknowledged"])]
-
-# Active Clients KPI: filtered to caseworker's org
-# Normalise org ID: session may store "ORG-001" but CSV uses "ORG-0001"
-def _normalise_org(oid: str) -> str:
-    import re
-    m = re.match(r"ORG-0*(\d+)$", str(oid))
-    return f"ORG-{int(m.group(1)):04d}" if m else str(oid)
-org_id_norm = _normalise_org(org_id)
-if not clients_df.empty and "primary_org_id" in clients_df.columns:
-    org_clients = clients_df[
-        clients_df["primary_org_id"].apply(_normalise_org) == org_id_norm
-    ]
-else:
-    org_clients = clients_df
-active_clients = len(org_clients)
+if not org_referrals.empty and "status" in org_referrals.columns:
+    stalled = org_referrals[org_referrals["status"].isin(["submitted","acknowledged"])]
 
 with st.spinner("Computing risk scores…"):
     risk_df = compute_risk_for_all(tables)
@@ -365,9 +378,9 @@ at_risk = risk_df[risk_df["risk_level"].isin(["HIGH","MODERATE"])].head(15) \
 
 def kpi_card(col, css_cls, label, value, sub, btn_key, dialog_fn, *dialog_args):
     """
-    KPI card: pure HTML for the visual card, transparent Streamlit button
-    placed immediately below to handle click → opens st.dialog.
-    This is the only approach that preserves the original big-number design.
+    KPI card: HTML card + invisible Streamlit button.
+    The button is styled to sit ON TOP of the card using negative margin-top
+    and full height/width — fully invisible but clickable.
     """
     accent = (
         "var(--red)"   if css_cls == "kpi-alert" else
@@ -376,21 +389,54 @@ def kpi_card(col, css_cls, label, value, sub, btn_key, dialog_fn, *dialog_args):
         "var(--navy)"
     )
     dec_color = (
-        "rgba(192,57,43,0.3)"  if css_cls == "kpi-alert" else
-        "rgba(192,112,0,0.3)"  if css_cls == "kpi-warn"  else
-        "rgba(26,107,58,0.3)"  if css_cls == "kpi-ok"    else
-        "rgba(15,41,66,0.3)"
+        "rgba(192,57,43,0.25)"  if css_cls == "kpi-alert" else
+        "rgba(192,112,0,0.25)"  if css_cls == "kpi-warn"  else
+        "rgba(26,107,58,0.25)"  if css_cls == "kpi-ok"    else
+        "rgba(15,41,66,0.25)"
     )
     with col:
-        # Pure HTML card — big number renders correctly
+        # Inject per-button CSS before the elements render
+        st.markdown(f"""<style>
+        /* Make the button invisible and cover the card above it */
+        div[data-testid="stButton"]:has(> div > button[data-testid="{btn_key}"]) {{
+            margin-top: -6.2rem !important;
+            height: 6.2rem !important;
+            overflow: hidden !important;
+        }}
+        button[data-testid="{btn_key}"] {{
+            width: 100% !important;
+            height: 6.2rem !important;
+            min-height: 0 !important;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            opacity: 0 !important;
+            cursor: pointer !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            font-size: 0 !important;
+            color: transparent !important;
+            display: block !important;
+        }}
+        /* Hover effect on the card when button is hovered —
+           we target the sibling card div via parent */
+        div[data-testid="stVerticalBlock"]:has(
+            button[data-testid="{btn_key}"]:hover
+        ) .kpi-{btn_key} {{
+            box-shadow: 0 3px 12px rgba(15,41,66,0.12) !important;
+            transform: translateY(-1px) !important;
+        }}
+        </style>""", unsafe_allow_html=True)
+
+        # HTML card — big number, correct styling, no Streamlit interference
         st.markdown(f"""
-        <div style="position:relative;z-index:1">
-        <div style="
-            background:var(--white);
-            border:1px solid var(--border);
-            border-left:3px solid {accent};
-            border-radius:6px;
-            padding:0.85rem 1rem 0.75rem 1rem;
+        <div class="kpi-{btn_key}" style="
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-left: 3px solid {accent};
+            border-radius: 6px;
+            padding: 0.85rem 1rem 0.75rem 1rem;
+            transition: box-shadow 0.15s, transform 0.1s;
         ">
           <div style="font-size:0.62rem;font-weight:600;text-transform:uppercase;
                       letter-spacing:0.07em;color:var(--text-sm);
@@ -405,38 +451,12 @@ def kpi_card(col, css_cls, label, value, sub, btn_key, dialog_fn, *dialog_args):
           <div style="font-size:0.63rem;color:var(--text-sm);
                       font-family:'IBM Plex Sans',sans-serif">{sub}</div>
         </div>
-        </div>
         """, unsafe_allow_html=True)
 
-        # Invisible trigger button overlaid on the HTML card
-        st.markdown(f"""<style>
-        button[data-testid="{btn_key}"] {{
-            position:absolute !important;
-            top:0 !important; left:0 !important;
-            width:100% !important; height:100% !important;
-            min-height:0 !important;
-            padding:0 !important; margin:0 !important;
-            border:none !important;
-            background:transparent !important;
-            box-shadow:none !important;
-            opacity:0 !important;
-            cursor:pointer !important;
-            z-index:100 !important;
-            font-size:0 !important;
-            line-height:0 !important;
-            color:transparent !important;
-        }}
-        div[data-testid="stButton"]:has(button[data-testid="{btn_key}"]) {{
-            position:absolute !important;
-            top:0 !important; left:0 !important;
-            width:100% !important; height:100% !important;
-            margin:0 !important; padding:0 !important;
-            z-index:100 !important;
-        }}
-        </style>""", unsafe_allow_html=True)
-
-        if st.button("", key=btn_key, use_container_width=True):
+        # Invisible button — negative margin pulls it up over the card
+        if st.button("open", key=btn_key, use_container_width=True):
             dialog_fn(*dialog_args)
+
 
 k1, k2, k3, k4 = st.columns(4)
 
