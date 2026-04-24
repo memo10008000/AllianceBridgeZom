@@ -195,7 +195,12 @@ def _search_clients(query: str) -> list[tuple[str, str]]:
     """
     Called by st_searchbox on every keystroke.
     Returns list of (display_label, client_id) tuples — shown in the dropdown.
+    Also stores the current query in session_state so the card list below
+    can reflect it without relying on fragile internal key names.
     """
+    # Track the current query for the card list rendered below
+    st.session_state["cs_last_query"] = query
+
     if not query or len(query.strip()) < 1:
         return []
     q = query.strip()
@@ -216,21 +221,24 @@ def _search_clients(query: str) -> list[tuple[str, str]]:
         cid       = str(row.get("client_id",  ""))
         dob       = str(row.get("dob", ""))[:10]
         housing   = str(row.get("housing_status", ""))
-        # Label shown in dropdown: "Jennifer Robinson  ·  CLI-0001  ·  1989-06-27"
         label = f"{first} {last}  ·  {cid}  ·  DOB {dob}  ·  {housing}"
         results.append((label, cid))
     return results
 
 # ── Searchbox — renders the Google-style input + dropdown ─────────────────────
+# Only valid st_searchbox params: search_function, key, placeholder, label,
+# default, clear_on_submit, clearable, debounce.
+# Do NOT pass label_visibility, rerun_on_update, or any Streamlit widget params.
+if "cs_last_query" not in st.session_state:
+    st.session_state["cs_last_query"] = ""
+
 selected_cid = st_searchbox(
     _search_clients,
     key="cs_searchbox",
     placeholder="🔍  Type a name, Client ID, DOB, or alias…",
     label="Client search",
-    label_visibility="collapsed",
     default=None,
     clear_on_submit=False,
-    rerun_on_update=True,
 )
 
 # ── If a suggestion was clicked — navigate straight to the profile ────────────
@@ -238,12 +246,8 @@ if selected_cid:
     st.session_state["selected_client_id"] = selected_cid
     st.switch_page("pages/3_Client_Profile.py")
 
-# ── Below the searchbox: show the full card list for the current query ─────────
-# st_searchbox keeps the typed text in cs_searchbox-search (internal key).
-# We read it to drive the card list so users can also see all matches, not just
-# the 10 in the dropdown.
-raw_q = st.session_state.get("cs_searchbox-search", "") or ""
-q = raw_q.strip()
+# ── Card list driven by the query stored inside _search_clients() ─────────────
+q = (st.session_state.get("cs_last_query") or "").strip()
 
 if not q:
     st.markdown(
