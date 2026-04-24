@@ -162,22 +162,30 @@ if "ocap_protected" in clients_df.columns:
     ocap_ids = set(clients_df[clients_df["ocap_protected"]==True]["client_id"])
 
 # ── Search bar ────────────────────────────────────────────────────────────────
-# NOTE: Do NOT pass value= together with key= — Streamlit treats the session-state
-# key as the single source of truth and silently ignores value=, which breaks the
-# live-search by always delivering an empty string to the filter logic.
+# Pattern: widget writes to cs_input (its key); on_change copies the value into
+# cs_query. The search logic reads cs_query — a clean, separately managed string
+# that is never double-bound to the widget. This is the only reliable way to do
+# live search in Streamlit without a custom component.
+if "cs_query" not in st.session_state:
+    st.session_state.cs_query = ""
+
+def _sync_query():
+    st.session_state.cs_query = st.session_state.cs_input
+
 st.text_input(
     "Search",
-    placeholder="Start typing a name, Client ID, DOB, or alias…",
+    placeholder="Start typing a name, Client ID, DOB, or alias…  (press Enter to search)",
     label_visibility="collapsed",
     key="cs_input",
+    on_change=_sync_query,
 )
 
-q = (st.session_state.get("cs_input") or "").strip()
+q = (st.session_state.cs_query or "").strip()
 
 # ── Hint line ─────────────────────────────────────────────────────────────────
 if not q:
     st.markdown(
-        '<div class="search-hint">🔍  Type at least 1 character to see suggestions</div>',
+        '<div class="search-hint">🔍  Type a name, Client ID, DOB, or alias and press <strong>Enter</strong></div>',
         unsafe_allow_html=True
     )
     st.stop()
