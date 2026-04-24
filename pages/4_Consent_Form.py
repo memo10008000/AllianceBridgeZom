@@ -24,22 +24,57 @@ def get_tables():
 tables = get_tables()
 
 # ── Session state init ────────────────────────────────────────────────────────
-if "consent_step"        not in st.session_state:
+if "consent_step"            not in st.session_state:
     st.session_state.consent_step = 1
-if "new_consent_records" not in st.session_state:
+if "new_consent_records"     not in st.session_state:
     st.session_state.new_consent_records = []
-if "consent_form_data"   not in st.session_state:
+if "consent_form_data"       not in st.session_state:
     st.session_state.consent_form_data = {}
+if "consent_just_confirmed"  not in st.session_state:
+    st.session_state.consent_just_confirmed = None  # holds the ID of the last saved record
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("## 📋 Record New Consent")
-if st.button("← Back to Dashboard"):
+if st.button("← Back to Dashboard", key="header_back"):
     st.switch_page("pages/1_Dashboard.py")
 st.divider()
 
 if _STUB:
     st.warning("⚠️ Running in stub mode — copy CSVs into data/ and restart.")
 
+# ── Success screen (shown after confirm, before wizard resets) ─────────────────
+if st.session_state.consent_just_confirmed:
+    confirmed_id = st.session_state.consent_just_confirmed
+    st.success(
+        f"✅ Consent recorded for this session · ID: **{confirmed_id}**\n\n"
+        "*(Demo mode: stored in session state, not persisted to CSV)*"
+    )
+    st.balloons()
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("📋 Record Another Consent", key="another_consent"):
+            st.session_state.consent_just_confirmed = None
+            st.session_state.consent_step = 1
+            st.session_state.consent_form_data = {}
+            st.rerun()
+    with col_b:
+        if st.button("← Back to Dashboard", key="confirmed_back"):
+            st.session_state.consent_just_confirmed = None
+            st.switch_page("pages/1_Dashboard.py")
+
+    # Show session log and stop — don't render the wizard below
+    if st.session_state.new_consent_records:
+        st.divider()
+        with st.expander(
+            f"📝 Session consent log "
+            f"({len(st.session_state.new_consent_records)} recorded this session)"
+        ):
+            session_df = pd.DataFrame(st.session_state.new_consent_records)
+            st.dataframe(session_df, use_container_width=True, hide_index=True)
+    st.stop()
+
+# ── Wizard ────────────────────────────────────────────────────────────────────
 step  = st.session_state.consent_step
 steps = ["Client", "Scope & Purpose", "Expiry & OCAP", "Review & Confirm"]
 
@@ -61,12 +96,11 @@ if step == 1:
         value=str(prefill),
         placeholder="CL-XXXXXXXX",
         help="Enter the client ID from the client record",
+        key="step1_client_id",
     )
 
-    # Guard: ensure client_id is always a string before calling .strip()
     client_id_clean = (client_id or "").strip()
 
-    # Show client name if we have data and an ID was entered
     if client_id_clean and not _STUB:
         clients_df = tables.get("clients", pd.DataFrame())
         if not clients_df.empty:
@@ -91,7 +125,7 @@ if step == 1:
     org        = st.session_state.get("caseworker_org",  "Unknown")
     st.info(f"📝 Caseworker: **{caseworker}** · Org: **{org}**")
 
-    if st.button("Next →", type="primary", disabled=not client_id_clean):
+    if st.button("Next →", type="primary", disabled=not client_id_clean, key="step1_next"):
         st.session_state.consent_form_data["client_id"]      = client_id_clean
         st.session_state.consent_form_data["caseworker"]     = caseworker
         st.session_state.consent_form_data["collecting_org"] = org
@@ -105,47 +139,40 @@ elif step == 2:
     consent_type = st.selectbox(
         "Consent type",
         ["explicit", "implied", "substitute", "emergency"],
-        help="Explicit is the strongest form. Required for cross-org data sharing.",
+        key="step2_consent_type",
     )
-
     legal_basis = st.selectbox(
         "Legal basis (PIPA / FOIPPA)",
         ["consent", "public_body", "legal_obligation", "vital_interest"],
+        key="step2_legal_basis",
     )
-
     purpose_codes = st.multiselect(
         "Purpose codes *(FOIPPA requires at least one)*",
         ["service_delivery", "ca_match", "reporting",
          "research", "outreach", "income_assistance"],
         default=["service_delivery"],
-        help="Select all purposes for which this data may be used.",
+        key="step2_purposes",
     )
-
     sharing_scope = st.selectbox(
         "Sharing scope",
         ["cluster", "single_agency_only", "bilateral", "ca_table"],
-        help=(
-            "cluster = all South Island DSA signatories · "
-            "single_agency_only = this org only · "
-            "bilateral = named agencies · "
-            "ca_table = Coordinated Access table"
-        ),
+        key="step2_scope",
     )
-
     if sharing_scope == "bilateral":
         st.text_input(
             "Named agencies (comma-separated org IDs)",
-            key="bilateral_orgs",
+            key="step2_bilateral_orgs",
             placeholder="ORG-002, ORG-004",
         )
 
     col_prev, col_next = st.columns(2)
     with col_prev:
-        if st.button("← Back"):
+        if st.button("← Back", key="step2_back"):
             st.session_state.consent_step = 1
             st.rerun()
     with col_next:
-        if st.button("Next →", type="primary", disabled=len(purpose_codes) == 0):
+        if st.button("Next →", type="primary",
+                     disabled=len(purpose_codes) == 0, key="step2_next"):
             st.session_state.consent_form_data.update({
                 "consent_type":  consent_type,
                 "legal_basis":   legal_basis,
@@ -159,7 +186,7 @@ elif step == 2:
 elif step == 3:
     st.subheader("Step 3: Expiry Date & OCAP Check")
 
-    no_expiry = st.checkbox("No expiry date (ongoing consent)")
+    no_expiry = st.checkbox("No expiry date (ongoing consent)", key="step3_no_expiry")
 
     expiry_date = None
     if not no_expiry:
@@ -167,31 +194,33 @@ elif step == 3:
             "Consent expires on",
             value=date.today() + timedelta(days=365),
             min_value=date.today() + timedelta(days=1),
+            key="step3_expiry",
         )
 
     capture_method = st.selectbox(
         "How was consent captured?",
         ["paper_form", "digital_signature", "verbal_witnessed",
          "kiosk", "third_party_authorized"],
+        key="step3_capture",
     )
-
     if capture_method == "paper_form":
         st.text_input(
             "Paper form reference number",
-            key="paper_ref",
+            key="step3_paper_ref",
             placeholder="e.g. OPS-2026-0423-001",
         )
 
     ocap_applies = st.checkbox(
         "🪶 Apply OCAP governance (client is First Nations)",
         value=bool(st.session_state.consent_form_data.get("ocap_protected", False)),
+        key="step3_ocap",
     )
     if ocap_applies:
         st.selectbox(
             "Governing Nation",
             ["Songhees Nation", "Esquimalt Nation",
              "Tsawout Nation", "Pauquachin Nation", "Other"],
-            key="ocap_nation",
+            key="step3_ocap_nation",
         )
         st.info(
             "🪶 OCAP requires that data ownership, control, access, and possession "
@@ -200,16 +229,16 @@ elif step == 3:
 
     col_prev, col_next = st.columns(2)
     with col_prev:
-        if st.button("← Back"):
+        if st.button("← Back", key="step3_back"):
             st.session_state.consent_step = 2
             st.rerun()
     with col_next:
-        if st.button("Next →", type="primary"):
+        if st.button("Next →", type="primary", key="step3_next"):
             st.session_state.consent_form_data.update({
                 "expiry_date":    str(expiry_date) if expiry_date else None,
                 "capture_method": capture_method,
                 "ocap_protected": ocap_applies,
-                "ocap_nation":    st.session_state.get("ocap_nation", None),
+                "ocap_nation":    st.session_state.get("step3_ocap_nation"),
             })
             st.session_state.consent_step = 4
             st.rerun()
@@ -245,13 +274,14 @@ elif step == 4:
 
     col_prev, col_confirm = st.columns(2)
     with col_prev:
-        if st.button("← Back"):
+        if st.button("← Back", key="step4_back"):
             st.session_state.consent_step = 3
             st.rerun()
     with col_confirm:
-        if st.button("✅ Confirm & Record Consent", type="primary"):
+        if st.button("✅ Confirm & Record Consent", type="primary", key="step4_confirm"):
+            new_id = f"CON-DEMO-{str(uuid.uuid4())[:8].upper()}"
             new_record = {
-                "consent_id":            f"CON-DEMO-{str(uuid.uuid4())[:8].upper()}",
+                "consent_id":            new_id,
                 "client_id":             form_data.get("client_id"),
                 "collecting_org_id":     form_data.get("collecting_org"),
                 "consent_type":          form_data.get("consent_type"),
@@ -268,30 +298,19 @@ elif step == 4:
             }
             st.session_state.new_consent_records.append(new_record)
 
-            # Reset wizard
-            st.session_state.consent_step     = 1
+            # Set confirmed state, reset wizard, rerun to success screen
+            st.session_state.consent_just_confirmed = new_id
+            st.session_state.consent_step = 1
             st.session_state.consent_form_data = {}
+            st.rerun()
 
-            st.success(
-                f"✅ Consent recorded for this session · ID: {new_record['consent_id']}\n\n"
-                "*(Demo mode: stored in session state, not persisted to CSV)*"
-            )
-            st.balloons()
-
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("📋 Record Another Consent"):
-                    st.rerun()
-            with col_b:
-                if st.button("← Back to Dashboard"):
-                    st.switch_page("pages/1_Dashboard.py")
-
-# ── Session consent log ───────────────────────────────────────────────────────
+# ── Session consent log (only shown when wizard is active, not on success screen) ──
 if st.session_state.new_consent_records:
     st.divider()
     with st.expander(
         f"📝 Session consent log "
-        f"({len(st.session_state.new_consent_records)} recorded this session)"
+        f"({len(st.session_state.new_consent_records)} recorded this session)",
+        expanded=False,
     ):
         session_df = pd.DataFrame(st.session_state.new_consent_records)
         st.dataframe(session_df, use_container_width=True, hide_index=True)

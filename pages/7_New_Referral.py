@@ -89,9 +89,27 @@ elif consent_status == "EXPIRING":
     exp = consent_record.get("expiry_date") if consent_record else None
     st.warning(f"⚠️ Consent expiring soon: {str(exp)[:10]} — consider renewal")
 else:
-    st.error(f"🚫 Cannot create referral — {gate_msg}")
-    if st.button("📋 Record Consent for this Client"):
-        st.switch_page("pages/4_Consent_Form.py")
+    block_reason = gate_msg or "Consent gate blocked this request."
+    st.error(
+        "### 🚫 Consent Gate — Referral Blocked"
+    )
+    st.error(block_reason)
+    st.info(
+        "This is not an app error. The Consent Gate has intentionally blocked this referral "
+        "to protect the client privacy rights under BC PIPA. "
+        "No data sharing or referrals are permitted until valid consent is recorded."
+    )
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        if st.button("📋 Record New Consent", key="blocked_consent"):
+            st.session_state["selected_client_id"] = client_id
+            st.switch_page("pages/4_Consent_Form.py")
+    with col_b:
+        if st.button("🔍 Search Different Client", key="blocked_search"):
+            st.switch_page("pages/2_Client_Search.py")
+    with col_c:
+        if st.button("🚨 View Compliance Audit", key="blocked_audit"):
+            st.switch_page("pages/5_Compliance_Audit.py")
     st.stop()
 
 st.divider()
