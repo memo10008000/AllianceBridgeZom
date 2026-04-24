@@ -69,6 +69,8 @@ with st.sidebar:
             break
 
     st.caption(f"🏢 `{st.session_state.caseworker_org}`")
+    st.divider()
+    st.caption("← Use the arrow to collapse")
 
 # ── Run the selected page ─────────────────────────────────────────────────────
 pg.run()

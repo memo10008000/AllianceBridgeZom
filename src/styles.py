@@ -39,8 +39,43 @@ html, body, [class*="css"], .stMarkdown, .stText,
     font-family: var(--sans) !important;
 }
 
-#MainMenu, footer, header { visibility: hidden; }
+/* Hide menu and footer but keep header so collapse button works */
+#MainMenu, footer { visibility: hidden; }
+header { visibility: visible !important; background: transparent !important; }
+header [data-testid="stToolbar"] { display: none; }
 .stDeployButton { display: none; }
+
+/* ── Sidebar collapse/expand button — always visible ── */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    background: var(--navy) !important;
+    border-radius: 0 6px 6px 0 !important;
+    width: 22px !important;
+    min-height: 60px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-shadow: 2px 0 6px rgba(0,0,0,0.15) !important;
+    transition: background 0.15s !important;
+    top: 40% !important;
+}
+[data-testid="collapsedControl"]:hover {
+    background: #1A3E5C !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: rgba(255,255,255,0.85) !important;
+    color: rgba(255,255,255,0.85) !important;
+}
+
+/* Sidebar close (collapse) button inside the sidebar */
+[data-testid="stSidebar"] button[data-testid="baseButton-headerNoPadding"] {
+    color: rgba(255,255,255,0.7) !important;
+}
+[data-testid="stSidebar"] button[data-testid="baseButton-headerNoPadding"]:hover {
+    color: #FFFFFF !important;
+    background: rgba(255,255,255,0.1) !important;
+}
 
 /* ── Slim dark sidebar ── */
 [data-testid="stSidebar"] {
