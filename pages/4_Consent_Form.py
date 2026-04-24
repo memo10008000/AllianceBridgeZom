@@ -54,7 +54,7 @@ if st.session_state.consent_just_confirmed:
             st.switch_page("pages/1_Dashboard.py")
     if st.session_state.new_consent_records:
         st.divider()
-        with st.expander(f"📝 Session log ({len(st.session_state.new_consent_records)} recorded)"):
+        with st.expander(f"Session log ({len(st.session_state.new_consent_records)} recorded)"):
             st.dataframe(pd.DataFrame(st.session_state.new_consent_records), use_container_width=True, hide_index=True)
     st.stop()
 
@@ -170,5 +170,5 @@ elif step == 4:
 
 if st.session_state.new_consent_records and not st.session_state.consent_just_confirmed:
     st.divider()
-    with st.expander(f"📝 Session log ({len(st.session_state.new_consent_records)} recorded this session)", expanded=False):
+    with st.expander(f"Session log ({len(st.session_state.new_consent_records)} recorded this session)", expanded=False):
         st.dataframe(pd.DataFrame(st.session_state.new_consent_records), use_container_width=True, hide_index=True)

@@ -137,7 +137,7 @@ with col_l:
         st.error("No organizations available within this client's consent scope.")
 
     if excluded:
-        with st.expander(f"🚫 {len(excluded)} org(s) excluded by Consent Gate"):
+        with st.expander(f"{len(excluded)} org(s) excluded by Consent Gate"):
             excl_html = ""
             for oid, oname, emsg in excluded:
                 excl_html += f'<div class="field-row"><span class="field-label">{oname}</span><span class="field-value" style="font-size:0.75rem;color:#64748B">{emsg}</span></div>'
@@ -177,5 +177,5 @@ if st.button("📤 Submit Referral", type="primary", disabled=disabled, key="nr_
 
 if st.session_state.new_referral_records:
     st.divider()
-    with st.expander(f"📝 Session log ({len(st.session_state.new_referral_records)} referral(s) this session)"):
+    with st.expander(f"Session log ({len(st.session_state.new_referral_records)} referral(s) this session)"):
         st.dataframe(pd.DataFrame(st.session_state.new_referral_records), use_container_width=True, hide_index=True)

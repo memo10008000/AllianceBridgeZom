@@ -76,7 +76,7 @@ with col_l:
         for flag, count in by_type.items():
             sev, icon = SEVERITY.get(flag, ("warn", "🟡"))
             kind = "red" if sev == "alert" else "amber"
-            with st.expander(f"{icon}  **{flag}** — {count} record(s)", expanded=sev == "alert"):
+            with st.expander(f"{flag}  —  {count} record(s)", expanded=sev == "alert"):
                 subset = red_flags[red_flags["flag_type"] == flag]
                 show_cols = [c for c in ["client_id","consent_id","status","expiry_date","notes"] if c in subset.columns]
                 st.dataframe(subset[show_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
@@ -117,7 +117,7 @@ with col_r:
     st.markdown("<br>", unsafe_allow_html=True)
     section_header("📋 Full Audit Log")
 
-    with st.expander("Show all RED_FLAG records"):
+    with st.expander("Show all RED_FLAG records", expanded=False):
         if red_flags.empty:
             st.info("No violations.")
         else:

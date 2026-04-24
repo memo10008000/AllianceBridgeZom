@@ -39,54 +39,34 @@ html, body, [class*="css"], .stMarkdown, .stText,
     font-family: var(--sans) !important;
 }
 
-/* ── Hide chrome, keep sidebar toggle working ── */
+/* ── Hide chrome ── */
 #MainMenu, footer { visibility: hidden; }
-/* Keep header visible so native sidebar collapse/expand button works */
-header {
-    visibility: visible !important;
-    background: transparent !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-}
-/* Hide everything in the header EXCEPT the sidebar toggle button */
-header > * { display: none !important; }
-[data-testid="stHeader"] { display: none !important; }
+/* Do NOT hide header — it contains the sidebar collapse/expand button */
+header { background: transparent !important; }
+[data-testid="stToolbar"] { display: none !important; }
+.stDeployButton { display: none; }
 
-/* ── Sidebar collapse/expand tab — always accessible ── */
-/* The native Streamlit sidebar toggle rendered outside the header */
-section[data-testid="stSidebarCollapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
+/* ── Sidebar toggle buttons — always visible and styled ── */
+/* Collapse button (inside sidebar, top right) */
+[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] {
+    color: rgba(255,255,255,0.6) !important;
 }
-button[data-testid="stSidebarNavCollapseButton"],
-button[data-testid="stBaseButton-headerNoPadding"] {
-    display: flex !important;
-    visibility: visible !important;
-    color: rgba(255,255,255,0.75) !important;
-    background: transparent !important;
-}
-button[data-testid="stSidebarNavCollapseButton"]:hover,
-button[data-testid="stBaseButton-headerNoPadding"]:hover {
+[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"]:hover {
     color: #FFFFFF !important;
-    background: rgba(255,255,255,0.12) !important;
+    background: rgba(255,255,255,0.1) !important;
+    border-radius: 4px !important;
 }
-/* The chevron/arrow button that appears when sidebar is collapsed */
-[data-testid="stSidebarCollapsedControl"] button {
+/* Expand button (left edge, when sidebar is collapsed) */
+[data-testid="stSidebarCollapsedControl"] {
     background: var(--navy) !important;
-    color: #FFFFFF !important;
     border-radius: 0 6px 6px 0 !important;
-    padding: 1rem 0.3rem !important;
-    visibility: visible !important;
-    display: flex !important;
 }
-[data-testid="stSidebarCollapsedControl"] button:hover {
+[data-testid="stSidebarCollapsedControl"]:hover {
     background: #1A3E5C !important;
 }
-[data-testid="stSidebarCollapsedControl"] button svg {
-    fill: #FFFFFF !important;
+[data-testid="stSidebarCollapsedControl"] span {
+    color: #FFFFFF !important;
 }
-.stDeployButton { display: none; }
 
 /* ── Slim dark sidebar ── */
 [data-testid="stSidebar"] {

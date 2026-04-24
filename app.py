@@ -1,6 +1,11 @@
 """
 Coordinated Care Console — app.py
 Entry point. Sidebar navigation, caseworker session state.
+
+NOTE: st.Page() icon= parameter is intentionally omitted.
+In newer Streamlit versions (1.40+), emoji icons in st.Page() are parsed
+as Material Symbols names and render as text (e.g. keyboard_double_arrow_right).
+Icons are handled purely through sidebar markdown instead.
 """
 import streamlit as st
 
@@ -12,9 +17,9 @@ st.set_page_config(
 )
 
 # ── Caseworker session ────────────────────────────────────────────────────────
-if "caseworker_org"       not in st.session_state: st.session_state.caseworker_org  = "ORG-001"
-if "caseworker_name"      not in st.session_state: st.session_state.caseworker_name = "J. Nguyen"
-if "selected_client_id"   not in st.session_state: st.session_state.selected_client_id = None
+if "caseworker_org"     not in st.session_state: st.session_state.caseworker_org  = "ORG-001"
+if "caseworker_name"    not in st.session_state: st.session_state.caseworker_name = "J. Nguyen"
+if "selected_client_id" not in st.session_state: st.session_state.selected_client_id = None
 
 ORG_OPTIONS = {
     "ORG-001": "Our Place Society",
@@ -28,16 +33,18 @@ ORG_OPTIONS = {
     "ORG-009": "Victoria Cool Aid",
 }
 
-# ── Navigation — icons and titles separated to avoid Material icon bug ────────
+# ── Navigation — NO icon= parameter, no emoji in title ───────────────────────
+# Emoji in title or icon= causes Material Symbols names to render as text
+# in Streamlit 1.40+. Labels are plain text; icons are in sidebar markdown only.
 pg = st.navigation(
     [
-        st.Page("pages/1_Dashboard.py",        title="Dashboard",       icon="📊", url_path="Dashboard"),
-        st.Page("pages/2_Client_Search.py",    title="Client Search",   icon="🔍", url_path="Client-Search"),
-        st.Page("pages/3_Client_Profile.py",   title="Client Profile",  icon="👤", url_path="Client-Profile"),
-        st.Page("pages/5_Compliance_Audit.py", title="Compliance Audit",icon="🚨", url_path="Compliance-Audit"),
-        st.Page("pages/4_Consent_Form.py",     title="Record Consent",  icon="📋", url_path="Consent-Form"),
-        st.Page("pages/7_New_Referral.py",     title="New Referral",    icon="➕", url_path="New-Referral"),
-        st.Page("pages/6_Duplicate_Review.py", title="Duplicate Review",icon="🔀", url_path="Duplicate-Review"),
+        st.Page("pages/1_Dashboard.py",        title="Dashboard",        url_path="Dashboard"),
+        st.Page("pages/2_Client_Search.py",    title="Client Search",    url_path="Client-Search"),
+        st.Page("pages/3_Client_Profile.py",   title="Client Profile",   url_path="Client-Profile"),
+        st.Page("pages/5_Compliance_Audit.py", title="Compliance Audit", url_path="Compliance-Audit"),
+        st.Page("pages/4_Consent_Form.py",     title="Record Consent",   url_path="Consent-Form"),
+        st.Page("pages/7_New_Referral.py",     title="New Referral",     url_path="New-Referral"),
+        st.Page("pages/6_Duplicate_Review.py", title="Duplicate Review", url_path="Duplicate-Review"),
     ],
     position="sidebar",
 )
@@ -45,7 +52,7 @@ pg = st.navigation(
 # ── Sidebar branding + org switcher ───────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🏥 Coordinated Care Console")
-    st.caption(f"👤 {st.session_state.caseworker_name}")
+    st.caption(f"👤  {st.session_state.caseworker_name}")
     st.divider()
 
     st.caption("**Switch org (demo)**")
@@ -60,7 +67,7 @@ with st.sidebar:
         if org_name == selected_name:
             st.session_state.caseworker_org = org_id
             break
-    st.caption(f"🏢 `{st.session_state.caseworker_org}`")
+    st.caption(f"🏢  `{st.session_state.caseworker_org}`")
 
 # ── Run selected page ─────────────────────────────────────────────────────────
 pg.run()

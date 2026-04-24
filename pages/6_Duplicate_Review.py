@@ -61,7 +61,7 @@ for idx, pair in pending.head(10).iterrows():
     score_pct    = int(float(score)*100) if score else 0
     icon = "🔴" if score_pct>=85 else "🟠" if score_pct>=70 else "🟡"
 
-    with st.expander(f"{icon}  **{score_pct}% match** — `{primary_id}` vs `{secondary_id}` · {reason}", expanded=idx==pending.index[0]):
+    with st.expander(f"{score_pct}% match — {primary_id} vs {secondary_id} · {reason}", expanded=idx==pending.index[0]):
         gate_p, msg_p = consent_gate(primary_id,   requesting_org, tables)
         gate_s, msg_s = consent_gate(secondary_id, requesting_org, tables)
 
