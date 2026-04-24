@@ -141,12 +141,13 @@ if clients_df.empty:
     st.error("Client data unavailable."); st.stop()
 
 # ── Clear any stale selected client AND searchbox state ───────────────────────
-# CRITICAL: cs_searchbox holds the last selected client_id inside the widget.
-# If we only clear selected_client_id, the searchbox still returns the old
-# value on render → sets selected_client_id back → loops to blocked profile.
-# We must clear cs_searchbox too so the widget starts fresh.
-for _k in ("selected_client_id", "cs_searchbox", "cs_last_query"):
-    st.session_state.pop(_k, None)
+# CRITICAL: If we clear this on EVERY rerun, we delete the user's keystrokes 
+# as they type. We must only clear it if they just arrived from another page.
+if st.session_state.get("current_page") != "search":
+    for _k in ("selected_client_id", "cs_searchbox", "cs_last_query"):
+        st.session_state.pop(_k, None)
+
+st.session_state["current_page"] = "search"
 
 # ── Precompute dup and ocap sets once ─────────────────────────────────────────
 dup_ids = set()

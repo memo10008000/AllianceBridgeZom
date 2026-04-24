@@ -258,6 +258,7 @@ tables     = get_tables()
 caseworker = st.session_state.get("caseworker_name", "Caseworker")
 org_id     = st.session_state.get("caseworker_org",  "ORG-001")
 today_str  = date.today().strftime("%a %d %b %Y")
+st.session_state["current_page"] = "dashboard"
 
 st.markdown(f"""
 <div class="page-header">

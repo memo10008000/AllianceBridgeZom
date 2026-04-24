@@ -23,6 +23,7 @@ def get_tables():
 tables         = get_tables()
 client_id      = st.session_state.get("selected_client_id")
 requesting_org = st.session_state.get("caseworker_org", "ORG-001")
+st.session_state["current_page"] = "profile"
 
 # ── Helper: clear the selected client so we don’t loop back ─────────────────
 def _go_search():
