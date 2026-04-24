@@ -1,9 +1,6 @@
 """
 Coordinated Care Console — app.py
-Entry point. Sets up sidebar navigation and caseworker session state.
-
-Using st.navigation() to define the page list explicitly — this removes
-the auto-generated "app" entry that would otherwise appear in the sidebar.
+Entry point. Sidebar navigation, caseworker session state.
 """
 import streamlit as st
 
@@ -14,15 +11,11 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Session state (simulated caseworker login for demo) ───────────────────────
-if "caseworker_org"  not in st.session_state:
-    st.session_state.caseworker_org  = "ORG-001"
-if "caseworker_name" not in st.session_state:
-    st.session_state.caseworker_name = "J. Nguyen"
-if "selected_client_id" not in st.session_state:
-    st.session_state.selected_client_id = None
+# ── Caseworker session ────────────────────────────────────────────────────────
+if "caseworker_org"       not in st.session_state: st.session_state.caseworker_org  = "ORG-001"
+if "caseworker_name"      not in st.session_state: st.session_state.caseworker_name = "J. Nguyen"
+if "selected_client_id"   not in st.session_state: st.session_state.selected_client_id = None
 
-# ── Org options for the switcher ──────────────────────────────────────────────
 ORG_OPTIONS = {
     "ORG-001": "Our Place Society",
     "ORG-002": "Cool Aid Society",
@@ -35,16 +28,16 @@ ORG_OPTIONS = {
     "ORG-009": "Victoria Cool Aid",
 }
 
-# ── Define navigation explicitly — removes the "app" sidebar entry ────────────
+# ── Navigation — icons and titles separated to avoid Material icon bug ────────
 pg = st.navigation(
     [
-        st.Page("pages/1_Dashboard.py",        title="📊 Dashboard",          url_path="Dashboard"),
-        st.Page("pages/2_Client_Search.py",    title="🔍 Client Search",       url_path="Client-Search"),
-        st.Page("pages/3_Client_Profile.py",   title="👤 Client Profile",      url_path="Client-Profile"),
-        st.Page("pages/5_Compliance_Audit.py", title="🚨 Compliance Audit",    url_path="Compliance-Audit"),
-        st.Page("pages/4_Consent_Form.py",     title="📋 Record Consent",      url_path="Consent-Form"),
-        st.Page("pages/7_New_Referral.py",     title="➕ New Referral",        url_path="New-Referral"),
-        st.Page("pages/6_Duplicate_Review.py", title="🔀 Duplicate Review",    url_path="Duplicate-Review"),
+        st.Page("pages/1_Dashboard.py",        title="Dashboard",       icon="📊", url_path="Dashboard"),
+        st.Page("pages/2_Client_Search.py",    title="Client Search",   icon="🔍", url_path="Client-Search"),
+        st.Page("pages/3_Client_Profile.py",   title="Client Profile",  icon="👤", url_path="Client-Profile"),
+        st.Page("pages/5_Compliance_Audit.py", title="Compliance Audit",icon="🚨", url_path="Compliance-Audit"),
+        st.Page("pages/4_Consent_Form.py",     title="Record Consent",  icon="📋", url_path="Consent-Form"),
+        st.Page("pages/7_New_Referral.py",     title="New Referral",    icon="➕", url_path="New-Referral"),
+        st.Page("pages/6_Duplicate_Review.py", title="Duplicate Review",icon="🔀", url_path="Duplicate-Review"),
     ],
     position="sidebar",
 )
@@ -67,10 +60,7 @@ with st.sidebar:
         if org_name == selected_name:
             st.session_state.caseworker_org = org_id
             break
-
     st.caption(f"🏢 `{st.session_state.caseworker_org}`")
-    st.divider()
-    st.caption("← Use the arrow to collapse")
 
-# ── Run the selected page ─────────────────────────────────────────────────────
+# ── Run selected page ─────────────────────────────────────────────────────────
 pg.run()
