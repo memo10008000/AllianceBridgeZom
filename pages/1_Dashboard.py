@@ -19,41 +19,6 @@ inject_css()
 
 st.markdown("""
 <style>
-/* ── KPI cards — full card is the clickable button ── */
-.stButton.kpi-btn > button {
-    background: var(--white) !important;
-    border: 1px solid var(--border) !important;
-    border-left: 3px solid var(--navy) !important;
-    border-radius: 6px !important;
-    padding: 0.85rem 1rem !important;
-    width: 100% !important;
-    height: auto !important;
-    min-height: unset !important;
-    text-align: left !important;
-    cursor: pointer !important;
-    box-shadow: none !important;
-    transition: box-shadow 0.15s, border-color 0.15s !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 0.1rem !important;
-    line-height: 1.3 !important;
-    white-space: normal !important;
-}
-.stButton.kpi-btn > button:hover {
-    box-shadow: 0 2px 10px rgba(15,41,66,0.10) !important;
-    border-color: var(--navy) !important;
-}
-.stButton.kpi-btn.alert > button { border-left-color: var(--red) !important; }
-.stButton.kpi-btn.warn  > button { border-left-color: var(--amber) !important; }
-.stButton.kpi-btn.ok    > button { border-left-color: var(--green) !important; }
-
-/* ── KPI inner text styling via pseudo-structure ── */
-/* We embed label + value + sub inside the button text using line breaks */
-.stButton.kpi-btn > button p {
-    margin: 0 !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
-}
-
 /* ── Responsive: stack to 2 cols on mobile ── */
 @media (max-width: 640px) {
     .kpi-responsive {
@@ -98,11 +63,50 @@ st.markdown("""
 .kpi-num.alert { color: var(--red); }
 .kpi-num.warn  { color: var(--amber); }
 .kpi-num.ok    { color: var(--green); }
+
+/* ── Number-as-link button — sits inside the card, looks like the big number ── */
+.kpi-num-btn button {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 2.1rem !important;
+    font-weight: 300 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    line-height: 1 !important;
+    color: var(--navy) !important;
+    cursor: pointer !important;
+    text-decoration: underline dotted !important;
+    text-decoration-color: rgba(15,41,66,0.35) !important;
+    text-underline-offset: 4px !important;
+    min-height: unset !important;
+    height: auto !important;
+    width: auto !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: inline !important;
+    letter-spacing: -0.01em !important;
+}
+.kpi-num-btn button:hover {
+    color: var(--teal) !important;
+    text-decoration: underline solid !important;
+    text-decoration-color: var(--teal) !important;
+}
+/* Colour variants */
+.kpi-num-btn.alert button          { color: var(--red) !important;
+                                      text-decoration-color: rgba(192,57,43,0.35) !important; }
+.kpi-num-btn.alert button:hover    { color: #8B1E14 !important; }
+.kpi-num-btn.warn  button          { color: var(--amber) !important;
+                                      text-decoration-color: rgba(192,112,0,0.35) !important; }
+.kpi-num-btn.warn  button:hover    { color: #8F5200 !important; }
+.kpi-num-btn.ok    button          { color: var(--green) !important;
+                                      text-decoration-color: rgba(26,107,58,0.35) !important; }
+.kpi-num-btn.ok    button:hover    { color: #0E4023 !important; }
 .kpi-click {
     font-size: 0.6rem; color: var(--teal);
     font-weight: 500; letter-spacing: 0.04em;
-    margin-left: 0.25rem; text-decoration: underline dotted;
-    text-underline-offset: 2px;
+    margin-left: 0.25rem;
+    display: none; /* number itself is now the link */
 }
 .kpi-sub { font-size: 0.65rem; color: var(--text-sm); margin-top: 0.3rem; }
 
@@ -284,53 +288,7 @@ at_risk = risk_df[risk_df["risk_level"].isin(["HIGH","MODERATE"])].head(15) \
 # Pattern: HTML card label + big number + "tap to open" hint, then
 # a transparent Streamlit button overlapping it for the click event.
 
-def kpi_card(col, label, value, sub, cls, key, dialog_fn, *dialog_args):
-    """Render one KPI card in `col` with a full-card clickable button."""
-    with col:
-        # Visual card (pure HTML — renders correctly on all screen sizes)
-        tick = "▲" if cls == "alert" else "●" if cls == "warn" else "✓" if cls == "ok" else ""
-        tick_color = "var(--red)" if cls=="alert" else "var(--amber)" if cls=="warn" else "var(--green)" if cls=="ok" else "var(--navy)"
-        num_cls = cls if cls else ""
-        st.markdown(f"""
-        <div class="kpi-card {cls}" style="margin-bottom:0.1rem">
-          <div class="kpi-lbl">{label}</div>
-          <div class="kpi-num {num_cls}">
-            {value}
-            <span style="font-size:0.7rem;color:{tick_color};font-family:'IBM Plex Sans',sans-serif">{tick}</span>
-            <span class="kpi-click">tap for detail</span>
-          </div>
-          <div class="kpi-sub">{sub}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Invisible full-width button placed right after the card
-        # CSS makes it transparent and overlapping — gives click area
-        st.markdown(f"""
-        <style>
-        div[data-testid="element-container"]:has(button[kind="secondary"]#btn_{key}) {{
-            margin-top: -4.2rem !important;
-            height: 4.2rem !important;
-            overflow: hidden;
-        }}
-        button[kind="secondary"]#btn_{key},
-        div[data-testid="element-container"]:has(> div > button[key="kpi_{key}"]) button {{
-            background: transparent !important;
-            border: none !important;
-            width: 100% !important;
-            height: 4.8rem !important;
-            opacity: 0 !important;
-            cursor: pointer !important;
-        }}
-        </style>
-        """, unsafe_allow_html=True)
-
-        if st.button(" ", key=f"kpi_{key}", use_container_width=True,
-                     help=f"View {label} detail"):
-            dialog_fn(*dialog_args)
-
-
-# Better approach: use st.columns layout with the card HTML + a real visible
-# button styled to match the original big-number look
+# KPI render helper below
 k1, k2, k3, k4 = st.columns(4)
 
 RF_CLS  = "alert" if len(red_flags) > 0 else "ok"
@@ -339,17 +297,10 @@ STL_CLS = "warn"  if len(stalled) > 10  else "ok"
 
 def render_kpi(col, label, value, sub, val_cls, btn_key, dialog_fn, *args):
     """
-    Render a professional KPI card.
-    The number + label are HTML. Below them sits a styled Streamlit button
-    that looks like a subtle 'View detail' link — clean, no overlap tricks.
+    KPI card: label + sub text are HTML. The number itself is a
+    Streamlit button styled to look like a large monospace hyperlink.
+    Clicking the number opens the dialog.
     """
-    val_color = {
-        "alert": "var(--red)",
-        "warn":  "var(--amber)",
-        "ok":    "var(--green)",
-        "":      "var(--navy)",
-    }.get(val_cls, "var(--navy)")
-
     border_color = {
         "alert": "var(--red)",
         "warn":  "var(--amber)",
@@ -358,60 +309,24 @@ def render_kpi(col, label, value, sub, val_cls, btn_key, dialog_fn, *args):
     }.get(val_cls, "var(--navy)")
 
     with col:
+        # Card top — label
         st.markdown(f"""
-        <div style="
-            background:var(--white);
-            border:1px solid var(--border);
-            border-left:3px solid {border_color};
-            border-radius:6px 6px 0 0;
-            padding:0.85rem 1rem 0.5rem 1rem;
-        ">
-          <div style="font-size:0.62rem;font-weight:600;text-transform:uppercase;
-                      letter-spacing:0.07em;color:var(--text-sm);margin-bottom:0.35rem">
-            {label}
-          </div>
-          <div style="font-size:2.1rem;font-weight:300;line-height:1;
-                      font-family:'IBM Plex Mono',monospace;color:{val_color}">
-            {value}
-          </div>
-          <div style="font-size:0.63rem;color:var(--text-sm);margin-top:0.3rem">
-            {sub}
-          </div>
+        <div class="kpi-card {val_cls}"
+             style="padding-bottom:0.2rem;border-radius:6px">
+          <div class="kpi-lbl">{label}</div>
+        """, unsafe_allow_html=True)
+
+        # Number as a transparent button — styled via CSS class kpi-num-btn
+        st.markdown(f'<div class="kpi-num-btn {val_cls}">', unsafe_allow_html=True)
+        if st.button(str(value), key=btn_key, help=f"View {label} detail"):
+            dialog_fn(*args)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Card bottom — sub text
+        st.markdown(f"""
+          <div class="kpi-sub" style="margin-top:0.2rem;padding-bottom:0.85rem">{sub}</div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Button sits flush below the card, styled as a teal "View detail" tab
-        st.markdown(f"""
-        <style>
-        div[data-testid="stButton"]:has(button[data-testid="{btn_key}"]) button {{
-            background: #F0FAF9 !important;
-            border: 1px solid {border_color} !important;
-            border-top: none !important;
-            border-radius: 0 0 6px 6px !important;
-            color: {val_color} !important;
-            font-size: 0.68rem !important;
-            font-weight: 600 !important;
-            letter-spacing: 0.04em !important;
-            text-transform: uppercase !important;
-            padding: 0.35rem 1rem !important;
-            width: 100% !important;
-            min-height: unset !important;
-            height: auto !important;
-            cursor: pointer !important;
-            box-shadow: none !important;
-            margin-top: 0 !important;
-            transition: background 0.12s !important;
-        }}
-        div[data-testid="stButton"]:has(button[data-testid="{btn_key}"]) button:hover {{
-            background: #D9F2F0 !important;
-        }}
-        </style>
-        """, unsafe_allow_html=True)
-
-        # data-testid is set via key in newer Streamlit
-        clicked = st.button("View detail  →", key=btn_key, use_container_width=True)
-        if clicked:
-            dialog_fn(*args)
 
 render_kpi(k1, "Active Clients",       active_clients,  "across all orgs",          "",      "kpi_clients",  dialog_active_clients, clients_df)
 render_kpi(k2, "RED_FLAG Violations",  len(red_flags),  "require immediate action",  RF_CLS, "kpi_flags",    dialog_red_flags,       red_flags, encounters_on_expired)
