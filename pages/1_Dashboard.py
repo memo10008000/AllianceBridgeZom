@@ -298,6 +298,66 @@ def dialog_stalled(stalled, referrals_df):
         st.switch_page("pages/7_New_Referral.py")
 
 
+@st.dialog("Referral Pipeline Detail", width="large")
+def dialog_pipeline(org_referrals_df):
+    if org_referrals_df.empty:
+        pill("No referral data available", "gray"); return
+
+    stages = [
+        ("submitted",    "Submitted",    "kpi-warn"),
+        ("acknowledged", "Acknowledged", "kpi-warn"),
+        ("accepted",     "kpi-ok",       "kpi-ok"),
+        ("in_progress",  "In Progress",  "kpi-ok"),
+        ("completed",    "Completed",    ""),
+        ("declined",     "Declined",     "kpi-alert"),
+        ("cancelled",    "Cancelled",    "kpi-alert"),
+    ]
+
+    # Summary row
+    cols = st.columns(len(stages))
+    for col, (status, label, _) in zip(cols, stages):
+        count = len(org_referrals_df[org_referrals_df["status"] == status])                 if "status" in org_referrals_df.columns else 0
+        col.metric(label, count)
+
+    st.divider()
+
+    # Tabs per status with detail
+    tab_labels = [f"{l} ({len(org_referrals_df[org_referrals_df['status']==s])})"
+                  for s, l, _ in stages
+                  if not org_referrals_df[org_referrals_df['status']==s].empty]                  if "status" in org_referrals_df.columns else []
+
+    if not tab_labels:
+        st.info("No referrals found for this organization.")
+        return
+
+    active_stages = [(s, l) for s, l, _ in stages
+                     if not org_referrals_df[org_referrals_df["status"]==s].empty]                     if "status" in org_referrals_df.columns else []
+
+    tabs = st.tabs(tab_labels)
+    show_cols = [c for c in ["referral_id","client_id","referral_type",
+                              "receiving_org_id","priority","submitted_at",
+                              "acknowledged_at","decision_at"]
+                 if c in org_referrals_df.columns]
+
+    for tab, (status, _) in zip(tabs, active_stages):
+        with tab:
+            subset = org_referrals_df[org_referrals_df["status"] == status]
+            if "submitted_at" in subset.columns:
+                subset = subset.copy()
+                subset["days_waiting"] = (
+                    pd.Timestamp.today() - subset["submitted_at"]
+                ).dt.days.fillna(0).astype(int)
+                show = ["days_waiting"] + [c for c in show_cols if c in subset.columns]
+            else:
+                show = [c for c in show_cols if c in subset.columns]
+            st.dataframe(subset[show].reset_index(drop=True),
+                         use_container_width=True, hide_index=True)
+
+    st.divider()
+    if st.button("New Referral →", type="primary", key="dlg_pipe_ref"):
+        st.switch_page("pages/7_New_Referral.py")
+
+
 # ══ DATA ══════════════════════════════════════════════════════════════════════
 
 @st.cache_data(show_spinner=False)
@@ -312,11 +372,21 @@ today_str  = date.today().strftime("%a %d %b %Y")
 # REQUIRED for Client Search bugfix: explicitly set current page
 st.session_state["current_page"] = "dashboard"
 
+# ── Normalise org ID: session may store "ORG-001", CSV uses "ORG-0001" ────────
+import re as _re
+def _norm_org(oid: str) -> str:
+    if str(oid).upper() == "ALL": return "ALL"
+    m = _re.match(r"ORG-0*(\d+)$", str(oid))
+    return f"ORG-{int(m.group(1)):04d}" if m else str(oid)
+
+org_id_norm = _norm_org(org_id)
+
+scope_label = "All Organizations" if org_id_norm == "ALL" else org_id_norm
 st.markdown(f"""
 <div class="page-header">
   <div>
     <div class="page-header-title">Good morning, {caseworker}</div>
-    <div class="page-header-sub">{org_id} &nbsp;·&nbsp; {today_str}</div>
+    <div class="page-header-sub">{scope_label} &nbsp;·&nbsp; {today_str}</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -324,13 +394,6 @@ st.markdown(f"""
 if _STUB:
     st.warning("Stub mode — add CSVs to data/ and restart."); st.stop()
 
-# ── Normalise org ID: session may store "ORG-001", CSV uses "ORG-0001" ────────
-import re as _re
-def _norm_org(oid: str) -> str:
-    m = _re.match(r"ORG-0*(\d+)$", str(oid))
-    return f"ORG-{int(m.group(1)):04d}" if m else str(oid)
-
-org_id_norm = _norm_org(org_id)
 
 # ── Load tables ──────────────────────────────────────────────────────────────
 consent_df   = tables.get("consent",   pd.DataFrame())
@@ -340,9 +403,11 @@ orgs_df      = tables.get("orgs",      pd.DataFrame())
 encounters_df = tables.get("encounters", pd.DataFrame())
 
 # ── Org-filtered views ───────────────────────────────────────────────────────
-# All KPIs scoped to the caseworker's org
+# When "ALL" is selected show all data; otherwise scope to caseworker's org
+_show_all = (org_id_norm == "ALL")
+
 def _filter_org(df, col):
-    if df.empty or col not in df.columns: return df
+    if _show_all or df.empty or col not in df.columns: return df
     return df[df[col].apply(_norm_org) == org_id_norm]
 
 org_clients   = _filter_org(clients_df,   "primary_org_id")
@@ -366,8 +431,14 @@ stalled = pd.DataFrame()
 if not org_referrals.empty and "status" in org_referrals.columns:
     stalled = org_referrals[org_referrals["status"].isin(["submitted","acknowledged"])]
 
+# Risk scored on org-scoped clients only
+org_tables_risk = dict(tables)
+org_tables_risk["clients"]   = org_clients
+org_tables_risk["consent"]   = org_consent
+org_tables_risk["referrals"] = org_referrals
+
 with st.spinner("Computing risk scores…"):
-    risk_df = compute_risk_for_all(tables)
+    risk_df = compute_risk_for_all(org_tables_risk)
 at_risk = risk_df[risk_df["risk_level"].isin(["HIGH","MODERATE"])].head(15) \
           if not risk_df.empty else pd.DataFrame()
 
@@ -464,10 +535,11 @@ RF_CLS  = "kpi-alert" if len(red_flags) > 0 else "kpi-ok"
 EXP_CLS = "kpi-warn"  if len(expiring_7) > 0 else "kpi-ok"
 STL_CLS = "kpi-warn"  if len(stalled)    > 10 else "kpi-ok"
 
-kpi_card(k1, "kpi-default", "Active Clients",       active_clients,  "across all orgs",           "kpi_clients",  dialog_active_clients, clients_df)
+kpi_clients_sub = "across all orgs" if _show_all else f"in {org_id_norm}"
+kpi_card(k1, "kpi-default", "Active Clients", active_clients, kpi_clients_sub, "kpi_clients", dialog_active_clients, org_clients)
 kpi_card(k2, RF_CLS,        "RED_FLAG Violations",  len(red_flags),  "require immediate action",   "kpi_flags",    dialog_red_flags,       red_flags, encounters_on_expired)
-kpi_card(k3, EXP_CLS,       "Consent Expiring ≤7d", len(expiring_7), f"{len(expiring_30)} ≤ 30d",  "kpi_expiring", dialog_expiring,        expiring_7, expiring_30, consent_df)
-kpi_card(k4, STL_CLS,       "Stalled Referrals",    len(stalled),    "awaiting response",           "kpi_stalled",  dialog_stalled,         stalled, referrals_df)
+kpi_card(k3, EXP_CLS,       "Consent Expiring ≤7d", len(expiring_7), f"{len(expiring_30)} ≤ 30d",  "kpi_expiring", dialog_expiring,        expiring_7, expiring_30, org_consent)
+kpi_card(k4, STL_CLS,       "Stalled Referrals",    len(stalled),    "awaiting response",           "kpi_stalled",  dialog_stalled,         stalled, org_referrals)
 
 st.divider()
 
@@ -527,13 +599,30 @@ with col_left:
     section_header("Referral Pipeline")
     stages = [("submitted","Submitted"),("acknowledged","Acknowledged"),
               ("accepted","Accepted"),("in_progress","In Progress"),("completed","Completed")]
-    counts = {s: (len(referrals_df[referrals_df["status"]==s])
-                  if not referrals_df.empty and "status" in referrals_df.columns else 0)
+    counts = {s: (len(org_referrals[org_referrals["status"]==s])
+                  if not org_referrals.empty and "status" in org_referrals.columns else 0)
               for s,_ in stages}
     stage_html = "".join(
         f'<div class="pipeline-stage"><span class="pipeline-count">{counts[s]}</span>'
         f'<span class="pipeline-label">{l}</span></div>' for s,l in stages)
     st.markdown(f'<div class="pipeline-row">{stage_html}</div>', unsafe_allow_html=True)
+
+    # Inject transparent button CSS + button to open pipeline dialog
+    st.markdown("""<style>
+    button[data-testid="pipe_detail"] {
+        background: transparent !important; border: none !important;
+        box-shadow: none !important; color: var(--teal) !important;
+        font-size: 0.72rem !important; font-weight: 600 !important;
+        letter-spacing: 0.04em !important; text-transform: uppercase !important;
+        padding: 0.3rem 0 !important; min-height: unset !important;
+        cursor: pointer !important; width: auto !important;
+        text-decoration: underline dotted !important;
+        text-underline-offset: 3px !important;
+    }
+    button[data-testid="pipe_detail"]:hover { color: var(--navy) !important; }
+    </style>""", unsafe_allow_html=True)
+    if st.button("View pipeline detail →", key="pipe_detail"):
+        dialog_pipeline(org_referrals)
 
 
 with col_right:

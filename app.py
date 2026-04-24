@@ -22,6 +22,7 @@ if "caseworker_name"    not in st.session_state: st.session_state.caseworker_nam
 if "selected_client_id" not in st.session_state: st.session_state.selected_client_id = None
 
 ORG_OPTIONS = {
+    "ALL":      "All Organizations",
     "ORG-0001": "Inner Harbour Emergency Shelter",
     "ORG-0002": "Rock Bay Youth Shelter",
     "ORG-0003": "Downtown Outreach Collective",
