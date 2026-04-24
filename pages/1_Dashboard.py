@@ -64,44 +64,52 @@ st.markdown("""
 .kpi-num.warn  { color: var(--amber); }
 .kpi-num.ok    { color: var(--green); }
 
-/* ── Number-as-link button — sits inside the card, looks like the big number ── */
-.kpi-num-btn button {
-    background: transparent !important;
-    border: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
+/* ── KPI number <a> link — visually identical to the original big number ── */
+a.kpi-link {
     font-size: 2.1rem !important;
     font-weight: 300 !important;
     font-family: 'IBM Plex Mono', monospace !important;
     line-height: 1 !important;
     color: var(--navy) !important;
-    cursor: pointer !important;
     text-decoration: underline dotted !important;
-    text-decoration-color: rgba(15,41,66,0.35) !important;
+    text-decoration-color: rgba(15,41,66,0.3) !important;
     text-underline-offset: 4px !important;
-    min-height: unset !important;
-    height: auto !important;
-    width: auto !important;
-    box-shadow: none !important;
-    border-radius: 0 !important;
-    display: inline !important;
     letter-spacing: -0.01em !important;
+    cursor: pointer !important;
+    display: inline-block !important;
+    margin-bottom: 0.25rem !important;
 }
-.kpi-num-btn button:hover {
+a.kpi-link:hover {
     color: var(--teal) !important;
-    text-decoration: underline solid !important;
+    text-decoration-style: solid !important;
     text-decoration-color: var(--teal) !important;
 }
-/* Colour variants */
-.kpi-num-btn.alert button          { color: var(--red) !important;
-                                      text-decoration-color: rgba(192,57,43,0.35) !important; }
-.kpi-num-btn.alert button:hover    { color: #8B1E14 !important; }
-.kpi-num-btn.warn  button          { color: var(--amber) !important;
-                                      text-decoration-color: rgba(192,112,0,0.35) !important; }
-.kpi-num-btn.warn  button:hover    { color: #8F5200 !important; }
-.kpi-num-btn.ok    button          { color: var(--green) !important;
-                                      text-decoration-color: rgba(26,107,58,0.35) !important; }
-.kpi-num-btn.ok    button:hover    { color: #0E4023 !important; }
+a.kpi-link.alert { color: var(--red) !important; text-decoration-color: rgba(192,57,43,0.3) !important; }
+a.kpi-link.alert:hover { color: #8B1E14 !important; }
+a.kpi-link.warn  { color: var(--amber) !important; text-decoration-color: rgba(192,112,0,0.3) !important; }
+a.kpi-link.warn:hover  { color: #8F5200 !important; }
+a.kpi-link.ok    { color: var(--green) !important; text-decoration-color: rgba(26,107,58,0.3) !important; }
+a.kpi-link.ok:hover    { color: #0E4023 !important; }
+
+/* ── Invisible trigger button overlaid on the card ── */
+.kpi-trigger-wrap {
+    position: relative;
+    margin-top: -5.5rem;  /* pull up to overlap the card */
+    height: 5.5rem;
+    overflow: hidden;
+}
+.kpi-trigger-wrap button {
+    opacity: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: unset !important;
+    cursor: pointer !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    z-index: 10 !important;
+}
 .kpi-click {
     font-size: 0.6rem; color: var(--teal);
     font-weight: 500; letter-spacing: 0.04em;
@@ -297,36 +305,27 @@ STL_CLS = "warn"  if len(stalled) > 10  else "ok"
 
 def render_kpi(col, label, value, sub, val_cls, btn_key, dialog_fn, *args):
     """
-    KPI card: label + sub text are HTML. The number itself is a
-    Streamlit button styled to look like a large monospace hyperlink.
-    Clicking the number opens the dialog.
+    KPI card: fully in HTML with a real <a> tag for the number.
+    An invisible overlaid Streamlit button intercepts the click to open
+    the st.dialog. This gives a perfect visual with native link behaviour.
     """
-    border_color = {
-        "alert": "var(--red)",
-        "warn":  "var(--amber)",
-        "ok":    "var(--green)",
-        "":      "var(--navy)",
-    }.get(val_cls, "var(--navy)")
-
     with col:
-        # Card top — label
+        # Full card in HTML — number is a real <a> hyperlink
         st.markdown(f"""
-        <div class="kpi-card {val_cls}"
-             style="padding-bottom:0.2rem;border-radius:6px">
+        <div class="kpi-card {val_cls}">
           <div class="kpi-lbl">{label}</div>
-        """, unsafe_allow_html=True)
-
-        # Number as a transparent button — styled via CSS class kpi-num-btn
-        st.markdown(f'<div class="kpi-num-btn {val_cls}">', unsafe_allow_html=True)
-        if st.button(str(value), key=btn_key, help=f"View {label} detail"):
-            dialog_fn(*args)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Card bottom — sub text
-        st.markdown(f"""
-          <div class="kpi-sub" style="margin-top:0.2rem;padding-bottom:0.85rem">{sub}</div>
+          <a class="kpi-link {val_cls}" href="#" onclick="return false;"
+             title="View {label} detail">{value}</a>
+          <div class="kpi-sub">{sub}</div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Invisible button overlaid on the card — intercepts click → opens dialog
+        st.markdown('<div class="kpi-trigger-wrap">', unsafe_allow_html=True)
+        if st.button(" ", key=btn_key, help=f"View {label} detail",
+                     use_container_width=True):
+            dialog_fn(*args)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 render_kpi(k1, "Active Clients",       active_clients,  "across all orgs",          "",      "kpi_clients",  dialog_active_clients, clients_df)
 render_kpi(k2, "RED_FLAG Violations",  len(red_flags),  "require immediate action",  RF_CLS, "kpi_flags",    dialog_red_flags,       red_flags, encounters_on_expired)
