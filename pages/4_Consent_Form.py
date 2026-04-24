@@ -15,12 +15,6 @@ try:
 except ImportError:
     _STUB = True
 
-st.set_page_config(
-    page_title="Record Consent — Coordinated Care Console",
-    page_icon="📋",
-    layout="centered",
-)
-
 @st.cache_data(show_spinner=False)
 def get_tables():
     if _STUB:
@@ -30,11 +24,11 @@ def get_tables():
 tables = get_tables()
 
 # ── Session state init ────────────────────────────────────────────────────────
-if "consent_step"          not in st.session_state:
+if "consent_step"        not in st.session_state:
     st.session_state.consent_step = 1
-if "new_consent_records"   not in st.session_state:
+if "new_consent_records" not in st.session_state:
     st.session_state.new_consent_records = []
-if "consent_form_data"     not in st.session_state:
+if "consent_form_data"   not in st.session_state:
     st.session_state.consent_form_data = {}
 
 # ── Header ────────────────────────────────────────────────────────────────────
@@ -49,7 +43,6 @@ if _STUB:
 step  = st.session_state.consent_step
 steps = ["Client", "Scope & Purpose", "Expiry & OCAP", "Review & Confirm"]
 
-# Progress bar + step labels
 st.progress(step / len(steps), text=f"Step {step} of {len(steps)}: {steps[step - 1]}")
 st.markdown(" → ".join(
     f"**{s}**" if i + 1 == step else s
@@ -61,44 +54,46 @@ st.divider()
 if step == 1:
     st.subheader("Step 1: Identify Client")
 
-    # Pre-fill if navigated from profile/search
-    prefill = st.session_state.get("selected_client_id", "")
+    prefill = st.session_state.get("selected_client_id") or ""
 
     client_id = st.text_input(
         "Client ID",
-        value=prefill,
+        value=str(prefill),
         placeholder="CL-XXXXXXXX",
         help="Enter the client ID from the client record",
     )
 
-    # Show client name if we have data
-    if client_id and not _STUB:
+    # Guard: ensure client_id is always a string before calling .strip()
+    client_id_clean = (client_id or "").strip()
+
+    # Show client name if we have data and an ID was entered
+    if client_id_clean and not _STUB:
         clients_df = tables.get("clients", pd.DataFrame())
-        match = clients_df[clients_df["client_id"] == client_id]
-        if not match.empty:
-            row = match.iloc[0]
-            st.success(
-                f"✅ Found: **{row.get('first_name','')} {row.get('last_name','')}** · "
-                f"Org: {row.get('primary_org_id', '')} · "
-                f"DOB: {str(row.get('dob',''))[:10]}"
-            )
-            # Warn if OCAP protected
-            if row.get("ocap_protected", False):
-                nation = row.get("ocap_governing_nation", "Unknown Nation")
-                st.warning(
-                    f"🪶 This client is OCAP-protected under **{nation}**. "
-                    "Ensure Nation governance approval before recording consent."
+        if not clients_df.empty:
+            match = clients_df[clients_df["client_id"] == client_id_clean]
+            if not match.empty:
+                row = match.iloc[0]
+                st.success(
+                    f"✅ Found: **{row.get('first_name','')} {row.get('last_name','')}** · "
+                    f"Org: {row.get('primary_org_id', '')} · "
+                    f"DOB: {str(row.get('dob',''))[:10]}"
                 )
-        else:
-            st.error(f"Client ID '{client_id}' not found in the database.")
+                if row.get("ocap_protected", False):
+                    nation = row.get("ocap_governing_nation", "Unknown Nation")
+                    st.warning(
+                        f"🪶 This client is OCAP-protected under **{nation}**. "
+                        "Ensure Nation governance approval before recording consent."
+                    )
+            else:
+                st.error(f"Client ID '{client_id_clean}' not found in the database.")
 
     caseworker = st.session_state.get("caseworker_name", "Unknown")
     org        = st.session_state.get("caseworker_org",  "Unknown")
     st.info(f"📝 Caseworker: **{caseworker}** · Org: **{org}**")
 
-    if st.button("Next →", type="primary", disabled=not client_id.strip()):
-        st.session_state.consent_form_data["client_id"]    = client_id.strip()
-        st.session_state.consent_form_data["caseworker"]   = caseworker
+    if st.button("Next →", type="primary", disabled=not client_id_clean):
+        st.session_state.consent_form_data["client_id"]      = client_id_clean
+        st.session_state.consent_form_data["caseworker"]     = caseworker
         st.session_state.consent_form_data["collecting_org"] = org
         st.session_state.consent_step = 2
         st.rerun()
@@ -152,10 +147,10 @@ elif step == 2:
     with col_next:
         if st.button("Next →", type="primary", disabled=len(purpose_codes) == 0):
             st.session_state.consent_form_data.update({
-                "consent_type":   consent_type,
-                "legal_basis":    legal_basis,
-                "purpose_codes":  " ".join(purpose_codes),
-                "sharing_scope":  sharing_scope,
+                "consent_type":  consent_type,
+                "legal_basis":   legal_basis,
+                "purpose_codes": " ".join(purpose_codes),
+                "sharing_scope": sharing_scope,
             })
             st.session_state.consent_step = 3
             st.rerun()
@@ -181,12 +176,15 @@ elif step == 3:
     )
 
     if capture_method == "paper_form":
-        st.text_input("Paper form reference number", key="paper_ref",
-                      placeholder="e.g. OPS-2026-0423-001")
+        st.text_input(
+            "Paper form reference number",
+            key="paper_ref",
+            placeholder="e.g. OPS-2026-0423-001",
+        )
 
     ocap_applies = st.checkbox(
         "🪶 Apply OCAP governance (client is First Nations)",
-        value=st.session_state.consent_form_data.get("ocap_flag", False),
+        value=bool(st.session_state.consent_form_data.get("ocap_protected", False)),
     )
     if ocap_applies:
         st.selectbox(
@@ -208,10 +206,10 @@ elif step == 3:
     with col_next:
         if st.button("Next →", type="primary"):
             st.session_state.consent_form_data.update({
-                "expiry_date":      str(expiry_date) if expiry_date else None,
-                "capture_method":   capture_method,
-                "ocap_protected":   ocap_applies,
-                "ocap_nation":      st.session_state.get("ocap_nation", None),
+                "expiry_date":    str(expiry_date) if expiry_date else None,
+                "capture_method": capture_method,
+                "ocap_protected": ocap_applies,
+                "ocap_nation":    st.session_state.get("ocap_nation", None),
             })
             st.session_state.consent_step = 4
             st.rerun()
@@ -222,21 +220,20 @@ elif step == 4:
 
     form_data = st.session_state.consent_form_data
 
-    # Summary table
     summary_rows = [
-        ("Client ID",       form_data.get("client_id", "")),
-        ("Caseworker",      form_data.get("caseworker", "")),
-        ("Collecting Org",  form_data.get("collecting_org", "")),
-        ("Consent Type",    form_data.get("consent_type", "")),
-        ("Legal Basis",     form_data.get("legal_basis", "")),
-        ("Purpose Codes",   form_data.get("purpose_codes", "")),
-        ("Sharing Scope",   form_data.get("sharing_scope", "")),
-        ("Expiry Date",     form_data.get("expiry_date", "No expiry")),
-        ("Capture Method",  form_data.get("capture_method", "")),
-        ("OCAP Protected",  "Yes" if form_data.get("ocap_protected") else "No"),
+        ("Client ID",      form_data.get("client_id", "")),
+        ("Caseworker",     form_data.get("caseworker", "")),
+        ("Collecting Org", form_data.get("collecting_org", "")),
+        ("Consent Type",   form_data.get("consent_type", "")),
+        ("Legal Basis",    form_data.get("legal_basis", "")),
+        ("Purpose Codes",  form_data.get("purpose_codes", "")),
+        ("Sharing Scope",  form_data.get("sharing_scope", "")),
+        ("Expiry Date",    form_data.get("expiry_date") or "No expiry"),
+        ("Capture Method", form_data.get("capture_method", "")),
+        ("OCAP Protected", "Yes" if form_data.get("ocap_protected") else "No"),
     ]
     if form_data.get("ocap_protected"):
-        summary_rows.append(("OCAP Nation", form_data.get("ocap_nation", "")))
+        summary_rows.append(("OCAP Nation", form_data.get("ocap_nation") or ""))
 
     summary_df = pd.DataFrame(summary_rows, columns=["Field", "Value"])
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -254,20 +251,20 @@ elif step == 4:
     with col_confirm:
         if st.button("✅ Confirm & Record Consent", type="primary"):
             new_record = {
-                "consent_id":          f"CON-DEMO-{str(uuid.uuid4())[:8].upper()}",
-                "client_id":           form_data.get("client_id"),
-                "collecting_org_id":   form_data.get("collecting_org"),
-                "consent_type":        form_data.get("consent_type"),
-                "legal_basis":         form_data.get("legal_basis"),
-                "purpose_codes":       form_data.get("purpose_codes"),
-                "sharing_scope_type":  form_data.get("sharing_scope"),
-                "expiry_date":         form_data.get("expiry_date"),
-                "given_date":          str(date.today()),
-                "status":              "active",
-                "capture_method":      form_data.get("capture_method"),
-                "ocap_protected":      form_data.get("ocap_protected", False),
+                "consent_id":            f"CON-DEMO-{str(uuid.uuid4())[:8].upper()}",
+                "client_id":             form_data.get("client_id"),
+                "collecting_org_id":     form_data.get("collecting_org"),
+                "consent_type":          form_data.get("consent_type"),
+                "legal_basis":           form_data.get("legal_basis"),
+                "purpose_codes":         form_data.get("purpose_codes"),
+                "sharing_scope_type":    form_data.get("sharing_scope"),
+                "expiry_date":           form_data.get("expiry_date"),
+                "given_date":            str(date.today()),
+                "status":                "active",
+                "capture_method":        form_data.get("capture_method"),
+                "ocap_protected":        form_data.get("ocap_protected", False),
                 "ocap_governing_nation": form_data.get("ocap_nation"),
-                "notes":               "Recorded via Coordinated Care Console demo",
+                "notes":                 "Recorded via Coordinated Care Console demo",
             }
             st.session_state.new_consent_records.append(new_record)
 
@@ -276,7 +273,7 @@ elif step == 4:
             st.session_state.consent_form_data = {}
 
             st.success(
-                f"✅ Consent recorded for session · ID: {new_record['consent_id']}\n\n"
+                f"✅ Consent recorded for this session · ID: {new_record['consent_id']}\n\n"
                 "*(Demo mode: stored in session state, not persisted to CSV)*"
             )
             st.balloons()
@@ -293,7 +290,8 @@ elif step == 4:
 if st.session_state.new_consent_records:
     st.divider()
     with st.expander(
-        f"📝 Session consent log ({len(st.session_state.new_consent_records)} recorded this session)"
+        f"📝 Session consent log "
+        f"({len(st.session_state.new_consent_records)} recorded this session)"
     ):
         session_df = pd.DataFrame(st.session_state.new_consent_records)
         st.dataframe(session_df, use_container_width=True, hide_index=True)
