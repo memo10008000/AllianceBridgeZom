@@ -200,21 +200,22 @@ def get_encounters_on_expired_consent(tables: dict) -> pd.DataFrame:
     if consent_df.empty or encounters_df.empty:
         return pd.DataFrame()
 
-    expired = consent_df[
-        (consent_df["status"] != "withdrawn") &
-        (consent_df["expiry_date"].notna()) &
-        (consent_df["expiry_date"] < pd.Timestamp.today())
-    ][["client_id", "consent_id", "expiry_date"]].copy()
-
-    if expired.empty:
-        return pd.DataFrame()
-
-    merged = encounters_df.merge(expired, on="client_id", how="inner")
+    merged = pd.merge(
+        encounters_df,
+        consent_df[["client_id", "status", "expiry_date", "consent_id"]],
+        on="client_id",
+        how="left"
+    )
 
     if "encounter_start" not in merged.columns:
         return pd.DataFrame()
 
-    violations = merged[merged["encounter_start"] > merged["expiry_date"]].copy()
+    violations = merged[
+        (merged["status"] == "active") &
+        (merged["expiry_date"].notna()) &
+        (merged["encounter_start"] > merged["expiry_date"])
+    ].copy()
+
     return violations.reset_index(drop=True)
 
 

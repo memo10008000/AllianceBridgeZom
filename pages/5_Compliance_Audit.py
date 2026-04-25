@@ -43,7 +43,8 @@ expiring_7            = get_expiring_soon(tables, days=7)
 expiring_30           = get_expiring_soon(tables, days=30)
 encounters_on_expired = get_encounters_on_expired_consent(tables)
 total                 = len(consent_df)
-score_val             = max(0, round(100 * (1 - len(red_flags) / max(total, 1)), 1))
+bad_records           = len(red_flags) + len(expiring_7) + len(encounters_on_expired)
+score_val             = max(0, round(100 * (total - bad_records) / max(total, 1), 1))
 score_cls             = "ok" if score_val >= 95 else "warn" if score_val >= 80 else "alert"
 
 kpi_bar([
