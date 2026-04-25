@@ -543,6 +543,20 @@ kpi_card(k4, STL_CLS,       "Stalled Referrals",    len(stalled),    "awaiting r
 
 st.divider()
 
+# ── Capacity Alerts ──────────────────────────────────────────────────────────
+if not orgs_df.empty and "capacity_occupied_slots" in orgs_df.columns and "capacity_total_slots" in orgs_df.columns:
+    occ = pd.to_numeric(orgs_df["capacity_occupied_slots"], errors="coerce").fillna(0)
+    tot = pd.to_numeric(orgs_df["capacity_total_slots"], errors="coerce").fillna(0)
+    over_cap = orgs_df[(occ > tot) & (tot > 0)].copy()
+    
+    if not over_cap.empty:
+        st.error(f"🚨 ALERT: {len(over_cap)} Organizations are Over-Capacity.")
+        with st.expander("View affected organizations"):
+            for _, org in over_cap.iterrows():
+                diff = int(org.get("capacity_occupied_slots", 0)) - int(org.get("capacity_total_slots", 0))
+                st.write(f"🛏️ **{org.get('org_name', 'Unknown')}**: Over by **{diff}** beds")
+        st.markdown("<br>", unsafe_allow_html=True)
+
 # ══ TWO-COLUMN BODY ═══════════════════════════════════════════════════════════
 col_left, col_right = st.columns([3, 2], gap="medium")
 
