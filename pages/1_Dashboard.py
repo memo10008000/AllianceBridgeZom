@@ -591,32 +591,27 @@ with col_left:
     if at_risk.empty:
         st.markdown('<div class="pill pill-green">No high or moderate risk clients</div>', unsafe_allow_html=True)
     else:
-        rows_html = ""
-        for i, (_, row) in enumerate(at_risk.iterrows(), 1):
-            level  = row["risk_level"]
-            bcls   = "badge-high" if level=="HIGH" else "badge-mod"
-            signal = str(row["top_signal"])[:48]
-            rows_html += f"""
-            <tr>
-              <td style="color:#64748B;font-family:'IBM Plex Mono',monospace;font-size:0.65rem">{i}</td>
-              <td style="font-weight:500">{row['full_name']}</td>
-              <td><span class="badge {bcls}">{level}</span></td>
-              <td style="font-family:'IBM Plex Mono',monospace">{row['risk_score']}/15</td>
-              <td style="color:#64748B;font-size:0.75rem">{signal}</td>
-            </tr>"""
-        st.markdown(f"""
-        <table class="risk-table">
-          <thead><tr><th>#</th><th>Client</th><th>Risk</th><th>Score</th><th>Top Signal</th></tr></thead>
-          <tbody>{rows_html}</tbody>
-        </table>""", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-        sel = st.selectbox("Open profile:", ["— select —"] + at_risk["full_name"].tolist(),
-                           label_visibility="collapsed", key="risk_select")
-        if sel != "— select —":
-            match = at_risk[at_risk["full_name"]==sel]
-            if not match.empty:
-                st.session_state["selected_client_id"] = match.iloc[0]["client_id"]
-                st.switch_page("pages/3_Client_Profile.py")
+        at_risk_indexed = at_risk.reset_index(drop=True)
+        display_df = pd.DataFrame({
+            "#":          range(1, len(at_risk_indexed) + 1),
+            "Client":     at_risk_indexed["full_name"],
+            "Risk":       at_risk_indexed["risk_level"],
+            "Score":      at_risk_indexed["risk_score"].apply(lambda x: f"{x}/15"),
+            "Top Signal": at_risk_indexed["top_signal"].apply(lambda x: str(x)[:48]),
+        })
+        result = st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            selection_mode="single-row",
+            on_select="rerun",
+        )
+        st.caption("Click a row to open the client profile")
+        selected_rows = result.selection.rows
+        if selected_rows:
+            client_id = at_risk_indexed.iloc[selected_rows[0]]["client_id"]
+            st.session_state["selected_client_id"] = client_id
+            st.switch_page("pages/3_Client_Profile.py")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
