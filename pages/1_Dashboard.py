@@ -358,6 +358,22 @@ def dialog_pipeline(org_referrals_df):
         st.switch_page("pages/7_New_Referral.py")
 
 
+@st.dialog("Over-Capacity Organizations", width="large")
+def dialog_over_capacity(over_cap_df):
+    if over_cap_df.empty:
+        pill("No organizations are over capacity.", "green"); return
+    
+    st.error(f"{len(over_cap_df)} organization(s) are currently operating over their maximum capacity.")
+    
+    over_cap_df = over_cap_df.copy()
+    occ = pd.to_numeric(over_cap_df["capacity_occupied_slots"], errors="coerce").fillna(0)
+    tot = pd.to_numeric(over_cap_df["capacity_total_slots"], errors="coerce").fillna(0)
+    over_cap_df["over_by"] = (occ - tot).astype(int)
+    
+    show = [c for c in ["org_name", "capacity_occupied_slots", "capacity_total_slots", "over_by"] if c in over_cap_df.columns]
+    st.dataframe(over_cap_df[show].reset_index(drop=True), use_container_width=True, hide_index=True)
+
+
 # ══ DATA ══════════════════════════════════════════════════════════════════════
 
 @st.cache_data(show_spinner=False)
@@ -529,33 +545,27 @@ def kpi_card(col, css_cls, label, value, sub, btn_key, dialog_fn, *dialog_args):
             dialog_fn(*dialog_args)
 
 
-k1, k2, k3, k4 = st.columns(4)
+over_cap = pd.DataFrame()
+if not orgs_df.empty and "capacity_occupied_slots" in orgs_df.columns and "capacity_total_slots" in orgs_df.columns:
+    occ = pd.to_numeric(orgs_df["capacity_occupied_slots"], errors="coerce").fillna(0)
+    tot = pd.to_numeric(orgs_df["capacity_total_slots"], errors="coerce").fillna(0)
+    over_cap = orgs_df[(occ > tot) & (tot > 0)].copy()
+
+k1, k2, k3, k4, k5 = st.columns(5)
 
 RF_CLS  = "kpi-alert" if len(red_flags) > 0 else "kpi-ok"
 EXP_CLS = "kpi-warn"  if len(expiring_7) > 0 else "kpi-ok"
 STL_CLS = "kpi-warn"  if len(stalled)    > 10 else "kpi-ok"
+CAP_CLS = "kpi-alert" if len(over_cap)   > 0 else "kpi-ok"
 
 kpi_clients_sub = "across all orgs" if _show_all else f"in {org_id_norm}"
 kpi_card(k1, "kpi-default", "Active Clients", active_clients, kpi_clients_sub, "kpi_clients", dialog_active_clients, org_clients)
 kpi_card(k2, RF_CLS,        "RED_FLAG Violations",  len(red_flags),  "require immediate action",   "kpi_flags",    dialog_red_flags,       red_flags, encounters_on_expired)
 kpi_card(k3, EXP_CLS,       "Consent Expiring ≤7d", len(expiring_7), f"{len(expiring_30)} ≤ 30d",  "kpi_expiring", dialog_expiring,        expiring_7, expiring_30, org_consent)
 kpi_card(k4, STL_CLS,       "Stalled Referrals",    len(stalled),    "awaiting response",           "kpi_stalled",  dialog_stalled,         stalled, org_referrals)
+kpi_card(k5, CAP_CLS,       "Capacity Alerts",      len(over_cap),   "orgs over capacity" if len(over_cap)>0 else "all within limits", "kpi_capacity", dialog_over_capacity, over_cap)
 
 st.divider()
-
-# ── Capacity Alerts ──────────────────────────────────────────────────────────
-if not orgs_df.empty and "capacity_occupied_slots" in orgs_df.columns and "capacity_total_slots" in orgs_df.columns:
-    occ = pd.to_numeric(orgs_df["capacity_occupied_slots"], errors="coerce").fillna(0)
-    tot = pd.to_numeric(orgs_df["capacity_total_slots"], errors="coerce").fillna(0)
-    over_cap = orgs_df[(occ > tot) & (tot > 0)].copy()
-    
-    if not over_cap.empty:
-        st.error(f"🚨 ALERT: {len(over_cap)} Organizations are Over-Capacity.")
-        with st.expander("View affected organizations"):
-            for _, org in over_cap.iterrows():
-                diff = int(org.get("capacity_occupied_slots", 0)) - int(org.get("capacity_total_slots", 0))
-                st.write(f"🛏️ **{org.get('org_name', 'Unknown')}**: Over by **{diff}** beds")
-        st.markdown("<br>", unsafe_allow_html=True)
 
 # ══ TWO-COLUMN BODY ═══════════════════════════════════════════════════════════
 col_left, col_right = st.columns([3, 2], gap="medium")
